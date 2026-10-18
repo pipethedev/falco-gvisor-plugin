@@ -7,6 +7,7 @@ import (
 )
 
 //go:generate go run ../../tools/gensysno -out . -pkg gvisor
+//go:generate go run ../../tools/genfields -out ../../docs/fields.md
 
 const (
 	evtTypeContainerStart   = "container_start"
