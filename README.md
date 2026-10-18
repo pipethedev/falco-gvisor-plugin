@@ -122,9 +122,9 @@ The lean profile traces `container/start`, `sentry/clone`, `sentry/execve` (with
 
 ## Validation status
 
-- **Falco 0.45.0** (arm64) loads the plugin next to the `container` plugin, and every rule fixture passes against it (`make rules-test`).
-- **gVisor runsc release-20261012.0** (arm64, systrap) was run against the plugin with the shipped pod-init session. Execs, clones, exits, pipes and upper-layer detection were observed end to end, and the drop-and-execute rule fired on a binary written to `/tmp`. This run found the `Default` session requirement and the `proc.name` handling of symlinked binaries.
-- **Not yet run:** the Docker and Kubernetes integration tests (`test/integration/run.sh`) and the benchmarks (`docs/perf.md`) need a Linux host with Docker and runsc; amd64 has been built in CI only.
+- **Falco 0.45.0** on arm64 and amd64 (amd64 under emulation) loads the plugin next to the `container` plugin, and every rule fixture plus the health check passes against both (`make rules-test`). The unit tests pass with the race detector on both architectures.
+- **gVisor runsc release-20261012.0** (arm64, systrap) was run against the plugin with the shipped pod-init session. Execs, clones, exits, pipes and upper-layer detection were observed end to end, and the drop-and-execute rule fired on a binary written to `/tmp`. The plugin also attached a trace session to a sandbox started without monitoring, and re-attached it after a Falco rules reload, with detection continuing. This run found the `Default` session requirement and the `proc.name` handling of symlinked binaries.
+- **Not yet run:** the Docker and Kubernetes integration tests (`test/integration/run.sh`), the benchmarks (`docs/perf.md`), and runsc on amd64. These need a Linux host with Docker and runsc.
 
 ## Building and testing
 
