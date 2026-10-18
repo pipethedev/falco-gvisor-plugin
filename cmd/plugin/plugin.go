@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/falcosecurity/plugin-sdk-go/pkg/sdk"
@@ -117,7 +118,10 @@ func (p *gvisorPlugin) decode(evt sdk.EventReader) (*gvisor.Event, error) {
 	return p.cacheEvent, err
 }
 
-func (p *gvisorPlugin) Open(string) (source.Instance, error) {
+func (p *gvisorPlugin) Open(params string) (source.Instance, error) {
+	if err := validateOpenParams(params); err != nil {
+		return nil, err
+	}
 	src, err := gvisor.StartSource(p.config, gvisor.NewExecRunner())
 	if err != nil {
 		return nil, err
@@ -152,4 +156,13 @@ func recoverInto(err *error, what string) {
 	if r := recover(); r != nil {
 		*err = fmt.Errorf("%s: recovered panic: %v", what, r)
 	}
+}
+
+var errOpenParams = errors.New("the gvisor plugin takes no open parameters; configure it through init_config")
+
+func validateOpenParams(params string) error {
+	if strings.TrimSpace(params) != "" {
+		return fmt.Errorf("%w (got %q)", errOpenParams, params)
+	}
+	return nil
 }

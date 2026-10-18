@@ -75,7 +75,7 @@ Guides for containerd/Kubernetes (Helm values, runsc shim config), Nomad and hos
 
 ## Configuration
 
-Add the plugin with [`deploy/falco.config.d/gvisor.yaml`](deploy/falco.config.d/gvisor.yaml). It is additive to an existing `falco.yaml`, including one running `modern_ebpf` with the `container` plugin. `init_config` is validated against a JSON schema with `additionalProperties: false`.
+The plugin takes no open parameters (`open_params`); a non-empty value is rejected when the source opens. Add the plugin with [`deploy/falco.config.d/gvisor.yaml`](deploy/falco.config.d/gvisor.yaml). It is additive to an existing `falco.yaml`, including one running `modern_ebpf` with the `container` plugin. `init_config` is validated against a JSON schema with `additionalProperties: false`.
 
 | Key | Default | Meaning |
 |---|---|---|

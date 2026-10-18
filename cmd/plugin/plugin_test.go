@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"os/exec"
 	"path/filepath"
 	"testing"
@@ -54,5 +55,16 @@ func TestPluginRejectsBadConfig(t *testing.T) {
 	t.Cleanup(p.Unload)
 	if err := p.Init(`{"unknownKey":true}`); err == nil {
 		t.Error("init accepted an unknown key")
+	}
+}
+
+func TestValidateOpenParams(t *testing.T) {
+	for _, ok := range []string{"", "  "} {
+		if err := validateOpenParams(ok); err != nil {
+			t.Errorf("open params %q rejected: %v", ok, err)
+		}
+	}
+	if err := validateOpenParams("socket=/tmp/x"); !errors.Is(err, errOpenParams) {
+		t.Errorf("non-empty open params accepted: %v", err)
 	}
 }
