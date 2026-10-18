@@ -1,0 +1,291 @@
+//go:build linux
+
+package gvisor
+
+import (
+	"errors"
+	"net"
+	"os"
+	"path/filepath"
+	"sync"
+	"testing"
+	"time"
+
+	"go.uber.org/goleak"
+	"google.golang.org/protobuf/proto"
+	pb "gvisor.dev/gvisor/pkg/sentry/seccheck/points/points_go_proto"
+	"gvisor.dev/gvisor/pkg/sentry/seccheck/sinks/remote/wire"
+)
+
+const testWait = 5 * time.Second
+
+type fakeResolver map[string]*ContainerInfo
+
+func (f fakeResolver) Lookup(id string) *ContainerInfo { return f[id] }
+
+type collector struct {
+	events chan []byte
+	accept bool
+}
+
+func newCollector(size int) *collector {
+	return &collector{events: make(chan []byte, size), accept: true}
+}
+
+func (c *collector) emit(data []byte, _ time.Time) bool {
+	if !c.accept {
+		return false
+	}
+	select {
+	case c.events <- data:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *collector) next(t *testing.T) Event {
+	t.Helper()
+	select {
+	case data := <-c.events:
+		evt, err := DecodeEvent(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return evt
+	case <-time.After(testWait):
+		t.Fatal("timed out waiting for event")
+		return Event{}
+	}
+}
+
+func startServer(t *testing.T, mutate func(*Config), c *collector, resolver ContainerResolver) (*Server, *Stats) {
+	t.Helper()
+	cfg := DefaultConfig()
+	cfg.SocketPath = filepath.Join(t.TempDir(), "gvisor.sock")
+	if mutate != nil {
+		mutate(&cfg)
+	}
+	stats := &Stats{}
+	srv := NewServer(cfg, c.emit, resolver, stats)
+	if err := srv.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = srv.Close() })
+	return srv, stats
+}
+
+func dialSandbox(t *testing.T, path string, version uint32) *net.UnixConn {
+	t.Helper()
+	conn, err := net.DialUnix(networkUnixPacket, nil, &net.UnixAddr{Name: path, Net: networkUnixPacket})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	hs, err := proto.Marshal(&pb.Handshake{Version: version})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Write(hs); err != nil {
+		t.Fatal(err)
+	}
+	return conn
+}
+
+func completeHandshake(t *testing.T, conn *net.UnixConn) {
+	t.Helper()
+	buf := make([]byte, handshakeBufferSize)
+	_ = conn.SetReadDeadline(time.Now().Add(testWait))
+	n, err := conn.Read(buf)
+	if err != nil {
+		t.Fatalf("handshake reply: %v", err)
+	}
+	var reply pb.Handshake
+	if err := proto.Unmarshal(buf[:n], &reply); err != nil || reply.GetVersion() != wire.CurrentVersion {
+		t.Fatalf("bad handshake reply %v: %v", &reply, err)
+	}
+}
+
+func connectSandbox(t *testing.T, path string) *net.UnixConn {
+	t.Helper()
+	conn := dialSandbox(t, path, wire.CurrentVersion)
+	completeHandshake(t, conn)
+	return conn
+}
+
+func send(t *testing.T, conn *net.UnixConn, pkt []byte) {
+	t.Helper()
+	if _, err := conn.Write(pkt); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(testWait)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
+
+func TestServerEnrichesEvents(t *testing.T) {
+	c := newCollector(16)
+	resolver := fakeResolver{testContainerID: {ID: testContainerID, Name: "web", Image: "nginx:1"}}
+	srv, stats := startServer(t, nil, c, resolver)
+	conn := connectSandbox(t, srv.socketPath)
+
+	send(t, conn, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
+		ContextData: testContext(1, 0, "sh"), BinaryPath: "/bin/sh", Argv: []string{"sh"},
+	}))
+	send(t, conn, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
+		ContextData: testContext(2, 1, "sh"), BinaryPath: "/usr/bin/id", Argv: []string{"id", "-u"},
+	}))
+
+	c.next(t)
+	evt := c.next(t)
+	if evt.Context.Process.Cmdline() != "id -u" || len(evt.Context.Ancestors) != 1 || evt.Context.Ancestors[0].ExePath != "/bin/sh" {
+		t.Errorf("unexpected process context %+v", evt.Context.Snapshot)
+	}
+	if evt.Context.Container == nil || evt.Context.Container.Name != "web" {
+		t.Errorf("container metadata missing: %+v", evt.Context.Container)
+	}
+	if got := stats.Events.Load(); got != 2 {
+		t.Errorf("events = %d", got)
+	}
+	waitFor(t, "connection info", func() bool {
+		conns := srv.Connections()
+		return len(conns) == 1 && len(conns[0].ContainerIDs) == 1 && conns[0].ContainerIDs[0] == testContainerID
+	})
+}
+
+func TestServerRejectsBadHandshakeOnly(t *testing.T) {
+	c := newCollector(16)
+	srv, stats := startServer(t, nil, c, fakeResolver{})
+	good := connectSandbox(t, srv.socketPath)
+
+	for _, version := range []uint32{0, wire.CurrentVersion + 1} {
+		bad := dialSandbox(t, srv.socketPath, version)
+		_ = bad.SetReadDeadline(time.Now().Add(testWait))
+		if _, err := bad.Read(make([]byte, handshakeBufferSize)); err == nil {
+			t.Errorf("version %d: expected connection to be closed", version)
+		}
+	}
+	waitFor(t, "rejections", func() bool { return stats.HandshakeRejected.Load() == 2 })
+
+	send(t, good, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_TASK_EXIT, &pb.TaskExit{ContextData: testContext(1, 0, "sh")}))
+	c.next(t)
+}
+
+func TestServerConcurrentConnections(t *testing.T) {
+	const clients, perClient = 8, 50
+	c := newCollector(clients * perClient)
+	srv, stats := startServer(t, nil, c, fakeResolver{})
+
+	var wg sync.WaitGroup
+	for i := range clients {
+		conn := connectSandbox(t, srv.socketPath)
+		wg.Go(func() {
+			for j := range perClient {
+				pkt, err := encodePacket(pb.MessageType_MESSAGE_SENTRY_EXEC, 0, &pb.ExecveInfo{
+					ContextData: testContext(int32(j+1), 0, "w"), BinaryPath: "/bin/true",
+				})
+				if err == nil {
+					_, err = conn.Write(pkt)
+				}
+				if err != nil {
+					t.Errorf("client %d: %v", i, err)
+					return
+				}
+			}
+		})
+	}
+	wg.Wait()
+	waitFor(t, "all events", func() bool { return stats.Events.Load() == clients*perClient })
+	if got := stats.TotalConnections.Load(); got != clients {
+		t.Errorf("total connections = %d", got)
+	}
+}
+
+func TestServerCountsDrops(t *testing.T) {
+	c := newCollector(1)
+	c.accept = false
+	srv, stats := startServer(t, func(cfg *Config) { cfg.MaxEventSize = minMaxEventSize }, c, fakeResolver{})
+	conn := connectSandbox(t, srv.socketPath)
+
+	ctx := testContext(1, 0, "sh")
+	send(t, conn, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_TASK_EXIT, &pb.TaskExit{ContextData: ctx}))
+	send(t, conn, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{ContextData: ctx, BinaryPath: string(make([]byte, 2*minMaxEventSize))}))
+	send(t, conn, []byte{1, 2, 3})
+	send(t, conn, mustPacket(t, pb.MessageType_MESSAGE_SYSCALL_WRITE, &pb.Write{ContextData: ctx}))
+	dropped, err := encodePacket(pb.MessageType_MESSAGE_SENTRY_TASK_EXIT, 5, &pb.TaskExit{ContextData: ctx})
+	if err != nil {
+		t.Fatal(err)
+	}
+	send(t, conn, dropped)
+
+	waitFor(t, "drop counters", func() bool {
+		return stats.DropChannelFull.Load() == 2 &&
+			stats.DropTruncated.Load() == 1 &&
+			stats.DropDecodeError.Load() == 1 &&
+			stats.DropUnsupported.Load() == 1 &&
+			stats.DropSandbox.Load() == 5
+	})
+}
+
+func TestServerShutdown(t *testing.T) {
+	c := newCollector(1)
+	srv, stats := startServer(t, nil, c, fakeResolver{})
+	connectSandbox(t, srv.socketPath)
+	connectSandbox(t, srv.socketPath)
+	waitFor(t, "connections", func() bool { return stats.Connections.Load() == 2 })
+
+	if err := srv.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(srv.socketPath); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("socket not removed: %v", err)
+	}
+	if got := stats.Connections.Load(); got != 0 {
+		t.Errorf("connections after close = %d", got)
+	}
+	if err := srv.Close(); err != nil {
+		t.Errorf("second close: %v", err)
+	}
+}
+
+func TestServerSocketReuse(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "sub", "gvisor.sock")
+	setPath := func(cfg *Config) { cfg.SocketPath = path }
+
+	first, _ := startServer(t, setPath, newCollector(1), fakeResolver{})
+	second := NewServer(Config{SocketPath: path, MaxEventSize: defaultMaxEventSize, MaxTrackedProcesses: 1}, newCollector(1).emit, fakeResolver{}, &Stats{})
+	if err := second.Start(); !errors.Is(err, errSocketInUse) {
+		t.Fatalf("expected errSocketInUse, got %v", err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	stale, err := net.ListenUnix(networkUnixPacket, &net.UnixAddr{Name: path, Net: networkUnixPacket})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale.SetUnlinkOnClose(false)
+	_ = stale.Close()
+
+	srv, _ := startServer(t, setPath, newCollector(1), fakeResolver{})
+	info, err := os.Stat(srv.socketPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != socketPerm {
+		t.Errorf("socket perm = %o", perm)
+	}
+}
