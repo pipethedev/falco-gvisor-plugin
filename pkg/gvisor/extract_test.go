@@ -152,6 +152,13 @@ func TestExtractOpen(t *testing.T) {
 	if get(t, evt, fieldFDName) != "/root/.ssh/id_rsa" {
 		t.Errorf("dirfd-relative path = %v", get(t, evt, fieldFDName))
 	}
+
+	evt = eventFor(t, pb.MessageType_MESSAGE_SYSCALL_OPEN, &pb.Open{
+		ContextData: testContext(42, 1, "sh"), Fd: 5, Pathname: "id_rsa",
+	})
+	if get(t, evt, fieldFDName) != nil || get(t, evt, fieldFDFilename) != nil || get(t, evt, fieldFDNameRaw) != "id_rsa" {
+		t.Errorf("unresolvable dirfd path must leave fd.name unset: name=%v raw=%v", get(t, evt, fieldFDName), get(t, evt, fieldFDNameRaw))
+	}
 }
 
 func TestExtractSocketAndPtrace(t *testing.T) {

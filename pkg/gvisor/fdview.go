@@ -95,11 +95,11 @@ func resolvePath(pathname string, dirfd int64, dirPath, cwd string) string {
 		return pathname
 	}
 	base := cwd
-	if dirfd != linux.AT_FDCWD && dirPath != "" {
+	if dirfd != linux.AT_FDCWD {
 		base = dirPath
 	}
 	if base == "" {
-		return pathname
+		return ""
 	}
 	return path.Join(base, pathname)
 }
