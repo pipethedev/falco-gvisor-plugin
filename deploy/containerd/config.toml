@@ -1,0 +1,10 @@
+# Snippet for /etc/containerd/config.toml (containerd 1.x config version 2).
+# For containerd 2.x use the plugins."io.containerd.cri.v1.runtime" prefix.
+version = 2
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc]
+  runtime_type = "io.containerd.runsc.v1"
+
+[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.runsc.options]
+  TypeUrl = "io.containerd.runsc.v1.options"
+  ConfigPath = "/etc/containerd/runsc.toml"

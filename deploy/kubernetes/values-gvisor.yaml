@@ -1,0 +1,59 @@
+# Values for the falcosecurity/falco Helm chart that add the gvisor plugin
+# next to the regular syscall source.
+#
+#   helm install falco falcosecurity/falco -n falco --create-namespace \
+#     -f deploy/kubernetes/values-gvisor.yaml
+#
+# Nodes running gVisor need /etc/falco/gvisor-pod-init.json on the host and
+# the runsc shim configured with it (deploy/containerd/).
+image:
+  registry: ghcr.io
+  repository: falcosecurity/falco-gvisor
+  tag: latest
+
+driver:
+  kind: modern_ebpf
+
+falco:
+  load_plugins: [container, gvisor]
+  plugins:
+    - name: gvisor
+      library_path: /usr/share/falco/plugins/libgvisor.so
+      init_config:
+        runscRoot: /run/containerd/runsc/k8s.io
+        metadataProvider: cri
+        criSocket: /run/containerd/containerd.sock
+  rules_files:
+    - /etc/falco/falco_rules.yaml
+    - /etc/falco/rules.d
+
+mounts:
+  volumes:
+    - name: gvisor-socket
+      hostPath:
+        path: /run/falco
+        type: DirectoryOrCreate
+    - name: runsc-bin
+      hostPath:
+        path: /usr/local/bin/runsc
+        type: File
+    - name: runsc-state
+      hostPath:
+        path: /run/containerd/runsc
+        type: DirectoryOrCreate
+    - name: containerd-socket
+      hostPath:
+        path: /run/containerd/containerd.sock
+        type: Socket
+  volumeMounts:
+    - name: gvisor-socket
+      mountPath: /run/falco
+    - name: runsc-bin
+      mountPath: /usr/local/bin/runsc
+      readOnly: true
+    - name: runsc-state
+      mountPath: /run/containerd/runsc
+    - name: containerd-socket
+      mountPath: /run/containerd/containerd.sock
+
+podPriorityClassName: system-node-critical

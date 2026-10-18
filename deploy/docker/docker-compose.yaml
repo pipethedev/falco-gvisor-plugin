@@ -1,0 +1,24 @@
+# Falco with the gvisor plugin on a Docker host whose gVisor runtime has
+# --pod-init-config=/etc/falco/gvisor-pod-init.json (see daemon.json).
+#
+# The plugin socket lives in /run/falco on the host so sandboxes (created in
+# the host mount namespace) can reach it. Host PID and the runsc binary and
+# state root are needed by the attacher. The syscall source (modern_ebpf)
+# keeps monitoring the host and non-gVisor containers in the same process.
+services:
+  falco:
+    image: ghcr.io/falcosecurity/falco-gvisor:latest
+    privileged: true
+    pid: host
+    restart: unless-stopped
+    environment:
+      HOST_ROOT: /host
+    volumes:
+      - /run/falco:/run/falco
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/host/var/run/docker.sock:ro
+      - /usr/local/bin/runsc:/usr/local/bin/runsc:ro
+      - /run/docker/runtime-runc/moby:/run/docker/runtime-runc/moby
+      - /proc:/host/proc:ro
+      - /etc:/host/etc:ro
+      - /etc/falco/gvisor-pod-init.json:/etc/falco/gvisor-pod-init.json:ro

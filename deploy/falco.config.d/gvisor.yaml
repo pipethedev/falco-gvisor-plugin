@@ -1,0 +1,31 @@
+# Additive Falco configuration for the gvisor plugin. Drop into
+# /etc/falco/config.d/; lists (plugins, load_plugins) are
+# appended to those in falco.yaml, so an existing modern_ebpf + container
+# plugin setup keeps working alongside the gvisor source.
+plugins:
+  - name: gvisor
+    library_path: /usr/share/falco/plugins/libgvisor.so
+    init_config: {}
+    # Defaults, shown for reference:
+    # init_config:
+    #   socketPath: /run/falco/gvisor.sock
+    #   runscPath: runsc
+    #   runscRoot: /run/docker/runtime-runc/moby   # containerd: /run/containerd/runsc/k8s.io
+    #   sessionConfigPath: /etc/falco/gvisor-session.json
+    #   attachOnOpen: true
+    #   attachIntervalSeconds: 300
+    #   metadataProvider: docker                    # cri under Kubernetes, or none
+    #   dockerSocket: /var/run/docker.sock
+    #   criSocket: /run/containerd/containerd.sock
+    #   labelAllowlist: []
+    #   metadataCacheTTLSeconds: 600
+    #   maxEventSize: 65536
+    #   maxTrackedProcesses: 4096
+    #   statsIntervalSeconds: 60
+load_plugins: [gvisor]
+# The rules ship as /etc/falco/rules.d/gvisor_rules.yaml, which the default
+# falco.yaml already loads through its /etc/falco/rules.d entry. Listing the
+# file here too would load it twice, the second time after your overrides in
+# rules.d, undoing them. Only if your falco.yaml does not load rules.d, add:
+# rules_files:
+#   - /etc/falco/rules.d/gvisor_rules.yaml

@@ -1,0 +1,158 @@
+{
+  "trace_session": {
+    "name": "falco",
+    "ignore_missing": true,
+    "points": [
+      {
+        "name": "container/start",
+        "context_fields": [
+          "time",
+          "container_id",
+          "thread_id",
+          "group_id",
+          "process_name",
+          "cwd",
+          "credentials",
+          "parent_thread_group_id",
+          "is_exec_session"
+        ]
+      },
+      {
+        "name": "sentry/clone",
+        "context_fields": [
+          "time",
+          "container_id",
+          "thread_id",
+          "group_id",
+          "process_name",
+          "cwd",
+          "credentials",
+          "parent_thread_group_id",
+          "is_exec_session"
+        ]
+      },
+      {
+        "name": "sentry/execve",
+        "optional_fields": [
+          "binary_info",
+          "binary_sha256",
+          "fd_info",
+          "pipe_proc_info"
+        ],
+        "context_fields": [
+          "time",
+          "container_id",
+          "thread_id",
+          "group_id",
+          "process_name",
+          "cwd",
+          "credentials",
+          "parent_thread_group_id",
+          "is_exec_session"
+        ]
+      },
+      {
+        "name": "sentry/task_exit",
+        "context_fields": [
+          "time",
+          "container_id",
+          "thread_id",
+          "group_id",
+          "process_name",
+          "cwd",
+          "credentials",
+          "parent_thread_group_id",
+          "is_exec_session"
+        ]
+      },
+      {
+        "name": "syscall/connect/exit",
+        "optional_fields": [
+          "fd_path"
+        ],
+        "context_fields": [
+          "time",
+          "container_id",
+          "thread_id",
+          "group_id",
+          "process_name",
+          "cwd",
+          "credentials",
+          "parent_thread_group_id",
+          "is_exec_session"
+        ]
+      },
+      {
+        "name": "syscall/socket/exit",
+        "context_fields": [
+          "time",
+          "container_id",
+          "thread_id",
+          "group_id",
+          "process_name",
+          "cwd",
+          "credentials",
+          "parent_thread_group_id",
+          "is_exec_session"
+        ]
+      },
+      {
+        "name": "syscall/execve/exit",
+        "context_fields": [
+          "time",
+          "container_id",
+          "thread_id",
+          "group_id",
+          "process_name",
+          "cwd",
+          "credentials",
+          "parent_thread_group_id",
+          "is_exec_session"
+        ]
+      },
+      {
+        "name": "syscall/execveat/exit",
+        "optional_fields": [
+          "fd_path"
+        ],
+        "context_fields": [
+          "time",
+          "container_id",
+          "thread_id",
+          "group_id",
+          "process_name",
+          "cwd",
+          "credentials",
+          "parent_thread_group_id",
+          "is_exec_session"
+        ]
+      },
+      {
+        "name": "syscall/ptrace/exit",
+        "context_fields": [
+          "time",
+          "container_id",
+          "thread_id",
+          "group_id",
+          "process_name",
+          "cwd",
+          "credentials",
+          "parent_thread_group_id",
+          "is_exec_session"
+        ]
+      }
+    ],
+    "sinks": [
+      {
+        "name": "remote",
+        "ignore_setup_error": true,
+        "config": {
+          "endpoint": "/run/falco/gvisor.sock",
+          "retries": 3,
+          "backoff": "50us",
+          "backoff_max": "1ms"
+        }
+      }
+    ]
+  }
+}

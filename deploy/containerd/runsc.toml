@@ -1,0 +1,7 @@
+# /etc/containerd/runsc.toml — options for the containerd runsc shim.
+# Referenced from config.toml via ConfigPath (see config.toml in this dir).
+log_path = "/var/log/runsc/%ID%/shim.log"
+log_level = "info"
+
+[runsc_config]
+  pod-init-config = "/etc/falco/gvisor-pod-init.json"
