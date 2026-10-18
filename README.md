@@ -31,11 +31,11 @@ gVisor runs containers on a user-space kernel, so host-kernel sensors (Falco's `
 
 - **Server.** Accepts one connection per sandbox, performs the remote-sink handshake, and keeps a per-sandbox process table built from `container/start`, `sentry/clone`, `sentry/execve` and `sentry/task_exit`. Every event carries an immutable snapshot of the process and up to 8 ancestors.
 - **Attacher.** gVisor sinks connect only when a sandbox is created and never reconnect. On startup and every `attachIntervalSeconds`, the plugin runs `runsc trace create --force` for every running sandbox without a live connection. Sandboxes started before Falco, or before Falco restarted, are monitored again automatically.
-- **Metadata.** Container name, image and labels (and the pod name, namespace and labels under CRI) are fetched asynchronously and cached. Environment variables are never requested, decoded or stored.
+- **Metadata.** Container name, image and labels (and the pod name, namespace and labels under CRI) are fetched asynchronously and cached. The shipped sessions never request environment variables; if a custom session does, they are stripped on receipt and never stored, logged or passed to Falco.
 
 ### Fail-open by design
 
-- Every shipped session config sets `"ignore_setup_error": true`, so a sandbox starts even when Falco is down.
+- Every shipped session config sets `"ignore_setup_error": true`, so a sandbox starts when Falco is down or its socket is missing. One case is not covered: if Falco is hung (for example stopped or frozen) while its socket still accepts connections, gVisor waits for the handshake reply without a timeout and sandbox creation blocks until Falco recovers ([upstream issue draft](docs/upstream-issues.md)).
 - The gVisor remote sink writes without blocking and drops points instead of stalling the workload.
 - The plugin never blocks on Falco: events wait in a queue bounded by `maxQueueBytes`, and when it is full they are dropped and counted (`gvisor_stats`), so a burst from a sandbox cannot exhaust Falco's memory.
 
@@ -104,7 +104,7 @@ Add the plugin with [`deploy/falco.config.d/gvisor.yaml`](deploy/falco.config.d/
 | `deploy/gvisor-session.json` | `sessionConfigPath` for the attacher (same session, bare format) |
 | `deploy/pod-init-full.json`, `deploy/gvisor-session-full.json` | Lean profile plus `syscall/openat` with `fd_path` |
 
-The lean profile traces `container/start`, `sentry/clone`, `sentry/execve` (with binary info, SHA-256, stdio fd info and the process feeding stdin through a pipe), `sentry/task_exit`, and the exits of `connect`, `socket`, `execve`, `execveat` and `ptrace`. File-based rules (cron/authorized_keys writes, service account tokens, sysrq, `/sys/kernel`) need the full profile, which costs more ([`docs/perf.md`](docs/perf.md)). Every session is named `falco`, so `trace create --force` replaces the pod-init session instead of adding a second one.
+The lean profile traces `container/start`, `sentry/clone`, `sentry/execve` (with binary info, SHA-256, stdio fd info and the process feeding stdin through a pipe), `sentry/task_exit`, and the exits of `connect`, `socket`, `execve`, `execveat` and `ptrace`. File-based rules (cron/authorized_keys writes, service account tokens, sysrq, `/sys/kernel`) need the full profile, which costs more ([`docs/perf.md`](docs/perf.md)). Every session is named `Default`: gVisor accepts no other name (it logs `only a single "Default" session is supported` and the sandbox runs unmonitored), and `trace create --force` then replaces the pod-init session instead of adding a second one.
 
 ## Fields and rules
 
@@ -119,6 +119,12 @@ The lean profile traces `container/start`, `sentry/clone`, `sentry/execve` (with
 
   Each rule has an `*_allowlist` override macro, and generic shells and package managers do not alert. `rules/tools/pool_ips.sh` resolves mining pool domains into an IP macro.
 - Rule tests: `make rules-test` runs Falco 0.45 in Docker and replays the fixtures in [`rules/tests`](rules/tests) into the plugin as a fake sandbox. Each attack fixture must fire exactly its expected rules, and the benign Node, Python, Go, nginx and exec-session workloads must fire none.
+
+## Validation status
+
+- **Falco 0.45.0** (arm64) loads the plugin next to the `container` plugin, and every rule fixture passes against it (`make rules-test`).
+- **gVisor runsc release-20261012.0** (arm64, systrap) was run against the plugin with the shipped pod-init session. Execs, clones, exits, pipes and upper-layer detection were observed end to end, and the drop-and-execute rule fired on a binary written to `/tmp`. This run found the `Default` session requirement and the `proc.name` handling of symlinked binaries.
+- **Not yet run:** the Docker and Kubernetes integration tests (`test/integration/run.sh`) and the benchmarks (`docs/perf.md`) need a Linux host with Docker and runsc; amd64 has been built in CI only.
 
 ## Building and testing
 
@@ -136,6 +142,8 @@ make lint
 The gVisor module is `gvisor.dev/gvisor` from its `go` branch (see `go.mod` for the exact pseudo-version). The decoder uses the official `points_go_proto` and remote-sink `wire` packages.
 
 ## Limitations
+
+- gVisor drops, without counting them, trace points whose string fields (argv, binary path, process name, working directory) are not valid UTF-8, because protobuf refuses to marshal them. Such activity is invisible to the plugin and to `gvisor_stats`. This must be fixed in gVisor ([upstream issue draft](docs/upstream-issues.md)).
 
 - Visibility is limited to the configured trace points; the lean profile does not trace file opens.
 - `proc.pid` values are sandbox-internal.

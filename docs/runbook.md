@@ -70,6 +70,7 @@ New containers are monitored at creation. Existing ones are attached by the plug
 
 | Symptom | Check |
 |---|---|
+| `connections` above 0 but no events | The session is not named `Default`: runsc logs `unable to configure event session: only a single "Default" session is supported` while the sink stays connected. Use the shipped session files. |
 | `connections=0` but sandboxes run | Socket path in the session `endpoint` must equal `socketPath`; `/run/falco` must be a host mount. runsc logs `Ignoring sink setup failure` when it cannot connect (by design the container still starts). |
 | New sandboxes monitored, old ones not | The attacher needs runsc and the state root: look for `attacher:` / `attach sandbox` errors and `attach_failures` in stats. Verify `runscRoot`. |
 | Attach fails with permission errors | Run Falco as root with host PID; mount the state root read-write. |
@@ -128,6 +129,7 @@ Because every sink sets `ignore_setup_error`, the order of these steps does not 
 
 ## Upgrades
 
-- Keep the session name `falco`, so the attacher's `--force` replaces sessions instead of duplicating them.
+- Keep the session name `Default`. gVisor rejects any other name, and the attacher's `--force` relies on it to replace the pod-init session.
+- The runsc Debian package ships its own `/etc/containerd/runsc.toml`; merge the `pod-init-config` line into it rather than replacing the file, and recheck it after runsc upgrades.
 - Sessions set `ignore_missing`, so a session written for a newer runsc works on older ones; unsupported points and fields are skipped.
 - After upgrading Falco or the plugin, running sandboxes are re-attached automatically on startup.

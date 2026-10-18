@@ -245,8 +245,9 @@
 
 - rule: gVisor Host Kernel Interface Tampering
   desc: >
-    Access to /proc/sysrq-trigger or a write under /sys/kernel, both used to probe or
-    tamper with the host kernel. Requires the full profile.
+    Access to /proc/sysrq-trigger or a write under /sys/kernel. Inside gVisor these files are
+    emulated and cannot reach the host kernel, but attempting them is a strong sign of an
+    escape or host-tampering attempt. Requires the full profile.
   condition: >
     gvisor_open and (fd.name = /proc/sysrq-trigger
                      or (evt.is_open_write = true and fd.name startswith /sys/kernel/))
