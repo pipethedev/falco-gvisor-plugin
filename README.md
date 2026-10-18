@@ -134,6 +134,7 @@ make build-linux    # dist/{amd64,arm64}/libgvisor.so via docker
 make test           # go test -race ./...
 make test-linux     # Linux-only tests from macOS, in a container
 make rules-test     # rules against a real Falco
+make test-gvisor    # real gVisor sandboxes next to Falco (any Docker host allowing privileged containers)
 make test-integration  # needs a Linux host with Docker, runsc and Falco
 make generate       # syscall tables and docs/fields.md
 make lint

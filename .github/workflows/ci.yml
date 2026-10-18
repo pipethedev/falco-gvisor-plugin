@@ -33,7 +33,7 @@ jobs:
           make generate
           git diff --exit-code
       - name: Shell scripts
-        run: shellcheck --severity=warning rules/tests/run.sh rules/tools/pool_ips.sh test/integration/run.sh test/perf/run.sh
+        run: shellcheck --severity=warning rules/tests/run.sh rules/tools/pool_ips.sh test/integration/run.sh test/perf/run.sh test/gvisor/run.sh
 
   test:
     strategy:
@@ -95,6 +95,16 @@ jobs:
         run: |
           chmod +x dist/${{ matrix.arch }}/replay
           PLUGIN_DIR=$PWD/dist/${{ matrix.arch }} ./rules/tests/run.sh
+
+  gvisor-sandbox:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: make image VERSION=0.1.0
+      - name: Real gVisor sandboxes next to Falco
+        run: IMAGE=falco-gvisor:0.1.0 ./test/gvisor/run.sh
 
   integration:
     needs: test

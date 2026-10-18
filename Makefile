@@ -12,7 +12,7 @@ DIST := dist
 VERSION ?= 0.1.0
 LDFLAGS := -s -w -X github.com/falcosecurity/plugins/plugins/gvisor/pkg/gvisor.PluginVersion=$(VERSION:v%=%)
 
-.PHONY: all build build-linux $(addprefix build-linux-,$(ARCHES)) test test-linux test-integration rules-test lint generate rules-tarball image clean
+.PHONY: all build build-linux $(addprefix build-linux-,$(ARCHES)) test test-linux test-integration test-gvisor rules-test lint generate rules-tarball image clean
 
 all: build
 
@@ -38,6 +38,9 @@ test-linux:
 
 test-integration: image
 	IMAGE=falco-gvisor:$(VERSION) ./test/integration/run.sh
+
+test-gvisor: image
+	IMAGE=falco-gvisor:$(VERSION) ./test/gvisor/run.sh
 
 rules-test: build-linux-$(HOST_ARCH)
 	FALCO_IMAGE=$(FALCO_IMAGE) PLUGIN_DIR=$(CURDIR)/$(DIST)/$(HOST_ARCH) ./rules/tests/run.sh
