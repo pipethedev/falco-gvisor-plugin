@@ -66,10 +66,11 @@ var openFlags = map[string]uint32{
 }
 
 var socketDomains = map[string]int32{
-	"AF_UNIX":   linux.AF_UNIX,
-	"AF_INET":   linux.AF_INET,
-	"AF_INET6":  linux.AF_INET6,
-	"AF_PACKET": linux.AF_PACKET,
+	"AF_UNIX":    linux.AF_UNIX,
+	"AF_INET":    linux.AF_INET,
+	"AF_INET6":   linux.AF_INET6,
+	"AF_PACKET":  linux.AF_PACKET,
+	"AF_NETLINK": linux.AF_NETLINK,
 }
 
 var socketTypes = map[string]int32{

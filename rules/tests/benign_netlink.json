@@ -1,0 +1,53 @@
+{
+  "description": "glibc getaddrinfo and Go net.Interfaces open AF_NETLINK SOCK_RAW sockets.",
+  "expect": [],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "python3",
+      "exe": "/usr/bin/python3",
+      "argv": [
+        "python3",
+        "app.py"
+      ]
+    },
+    {
+      "point": "syscall/socket",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "python3",
+      "domain": "AF_NETLINK",
+      "type": "SOCK_RAW"
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 3,
+      "ppid": 1,
+      "comm": "server",
+      "exe": "/app/server",
+      "argv": [
+        "/app/server"
+      ]
+    },
+    {
+      "point": "syscall/socket",
+      "pid": 3,
+      "ppid": 1,
+      "comm": "server",
+      "domain": "AF_NETLINK",
+      "type": "SOCK_RAW"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "description": "CLIs taking an --algorithm flag are not miners.",
+  "expect": [],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "rclone",
+      "exe": "/usr/local/bin/rclone",
+      "argv": [
+        "rclone",
+        "hashsum",
+        "--algorithm",
+        "sha256",
+        "/data"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 3,
+      "ppid": 1,
+      "comm": "openssl",
+      "exe": "/usr/bin/openssl",
+      "argv": [
+        "openssl",
+        "genpkey",
+        "-algorithm",
+        "ed25519"
+      ]
+    }
+  ]
+}

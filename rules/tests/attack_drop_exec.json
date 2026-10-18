@@ -1,5 +1,5 @@
 {
-  "description": "Payload downloaded to /dev/shm and executed.",
+  "description": "Payload written to the rootfs /tmp (upper layer) and to /dev/shm (tmpfs, never upper layer in gVisor) and executed.",
   "expect": [
     "gVisor Dropped Binary Executed From Temp Directory"
   ],
@@ -19,11 +19,21 @@
       "pid": 2,
       "ppid": 1,
       "comm": "update",
+      "exe": "/tmp/update",
+      "argv": [
+        "/tmp/update"
+      ],
+      "upper_layer": true
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 3,
+      "ppid": 1,
+      "comm": "update",
       "exe": "/dev/shm/.cache/update",
       "argv": [
         "/dev/shm/.cache/update"
-      ],
-      "upper_layer": true
+      ]
     }
   ]
 }
