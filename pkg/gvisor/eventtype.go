@@ -1,6 +1,7 @@
 package gvisor
 
 import (
+	"runtime"
 	"strconv"
 
 	pb "gvisor.dev/gvisor/pkg/sentry/seccheck/points/points_go_proto"
@@ -30,8 +31,15 @@ var sentryPoints = map[pb.MessageType]struct{ evtType, point string }{
 	pb.MessageType_MESSAGE_SENTRY_EXIT_NOTIFY_PARENT: {evtTypeExitNotifyParent, "sentry/exit_notify_parent"},
 }
 
-func syscallName(sysno uint64) string {
-	if name, ok := syscallNames[sysno]; ok {
+func syscallTable(arch string) map[uint64]string {
+	if table, ok := syscallTables[arch]; ok {
+		return table
+	}
+	return syscallTables[runtime.GOARCH]
+}
+
+func syscallName(arch string, sysno uint64) string {
+	if name, ok := syscallTable(arch)[sysno]; ok {
 		return name
 	}
 	return evtTypeUnknownSyscall + strconv.FormatUint(sysno, 10)
@@ -43,7 +51,7 @@ func (p Point) EventType() string {
 		return sp.evtType
 	}
 	if sc, ok := p.Msg.(syscallMessage); ok {
-		return syscallName(sc.GetSysno())
+		return syscallName(p.Arch, sc.GetSysno())
 	}
 	return p.Type.String()
 }
@@ -61,7 +69,7 @@ func (p Point) PointName() string {
 	if sc.GetExit() != nil {
 		suffix = pointSuffixExit
 	}
-	return pointPrefixSyscall + syscallName(sc.GetSysno()) + suffix
+	return pointPrefixSyscall + syscallName(p.Arch, sc.GetSysno()) + suffix
 }
 
 // Sysno returns the syscall number, and false for non-syscall points.
@@ -74,7 +82,7 @@ func (p Point) Sysno() (uint64, bool) {
 
 // SyscallNumber returns the syscall number of name on the build architecture.
 func SyscallNumber(name string) (uint64, bool) {
-	for nr, n := range syscallNames {
+	for nr, n := range syscallTable(runtime.GOARCH) {
 		if n == name {
 			return nr, true
 		}

@@ -243,7 +243,7 @@ func (s *Server) countDecodeError(err error) {
 func (s *Server) handlePoint(sc *sandboxConn, table *ProcessTable, point Point) {
 	snap := table.Apply(point)
 	containerID := pointContainerID(point)
-	ctx := EventContext{Snapshot: snap}
+	ctx := EventContext{Snapshot: snap, Arch: point.Arch}
 	if containerID != "" {
 		sc.addContainer(containerID)
 		ctx.Container = s.resolver.Lookup(containerID)

@@ -3,6 +3,7 @@ package gvisor
 import (
 	"errors"
 	"fmt"
+	"runtime"
 
 	"google.golang.org/protobuf/proto"
 	pb "gvisor.dev/gvisor/pkg/sentry/seccheck/points/points_go_proto"
@@ -21,6 +22,7 @@ type Point struct {
 	Dropped uint32
 	Msg     proto.Message
 	Raw     []byte
+	Arch    string
 }
 
 type contextual interface {
@@ -81,7 +83,7 @@ func DecodePoint(msg []byte) (Point, error) {
 		}
 		raw = scrubbed
 	}
-	return Point{Type: msgType, Dropped: hdr.DroppedCount, Msg: decoded, Raw: raw}, nil
+	return Point{Type: msgType, Dropped: hdr.DroppedCount, Msg: decoded, Raw: raw, Arch: runtime.GOARCH}, nil
 }
 
 // Context returns the point's common context data, or nil when absent.

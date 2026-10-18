@@ -24,6 +24,7 @@ var (
 type EventContext struct {
 	Snapshot
 	Container *ContainerInfo `json:"ctr,omitempty"`
+	Arch      string         `json:"arch,omitempty"`
 }
 
 // Event is a decoded plugin event: either enrichment plus the original
@@ -81,6 +82,9 @@ func DecodeEvent(data []byte) (Event, error) {
 	point, err := DecodePoint(body[ctxLen:])
 	if err != nil {
 		return Event{}, err
+	}
+	if ctx.Arch != "" {
+		point.Arch = ctx.Arch
 	}
 	return Event{Context: ctx, Point: point}, nil
 }

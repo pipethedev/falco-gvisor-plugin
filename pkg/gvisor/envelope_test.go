@@ -105,3 +105,27 @@ func FuzzDecodeEvent(f *testing.F) {
 		_, _ = DecodeEvent(data)
 	})
 }
+
+func TestEnvelopeArchSelectsSyscallTable(t *testing.T) {
+	cases := []struct {
+		arch  string
+		sysno uint64
+	}{
+		{"amd64", 42},
+		{"arm64", 203},
+	}
+	for _, tc := range cases {
+		packet := mustPacket(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{ContextData: testContext(1, 0, "c"), Sysno: tc.sysno, Exit: &pb.Exit{}})
+		data, err := EncodeEvent(EventContext{Arch: tc.arch}, packet)
+		if err != nil {
+			t.Fatal(err)
+		}
+		evt, err := DecodeEvent(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := evt.Point.EventType(); got != "connect" {
+			t.Errorf("%s sysno %d decoded as %q, want connect", tc.arch, tc.sysno, got)
+		}
+	}
+}

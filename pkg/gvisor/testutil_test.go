@@ -1,6 +1,7 @@
 package gvisor
 
 import (
+	"runtime"
 	"testing"
 	"time"
 
@@ -48,7 +49,7 @@ func mustPoint(t testing.TB, msgType pb.MessageType, msg proto.Message) Point {
 
 func sysnoOf(t testing.TB, name string) uint64 {
 	t.Helper()
-	for nr, n := range syscallNames {
+	for nr, n := range syscallTable(runtime.GOARCH) {
 		if n == name {
 			return nr
 		}
