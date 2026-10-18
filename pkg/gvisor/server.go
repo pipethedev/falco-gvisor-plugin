@@ -27,6 +27,7 @@ const (
 	minWireVersion      = 1
 	acceptRetryDelay    = 100 * time.Millisecond
 	staleProbeTimeout   = 500 * time.Millisecond
+	maxConnContainers   = 256
 )
 
 var (
@@ -80,6 +81,7 @@ type sandboxConn struct {
 
 	mu           sync.Mutex
 	containerIDs map[string]struct{}
+	idOrder      []string
 }
 
 // NewServer returns a server that is not listening yet.
@@ -356,7 +358,12 @@ func (sc *sandboxConn) addContainer(id string) bool {
 	if _, seen := sc.containerIDs[id]; seen {
 		return false
 	}
+	if len(sc.idOrder) >= maxConnContainers {
+		delete(sc.containerIDs, sc.idOrder[0])
+		sc.idOrder = sc.idOrder[1:]
+	}
 	sc.containerIDs[id] = struct{}{}
+	sc.idOrder = append(sc.idOrder, id)
 	return true
 }
 
