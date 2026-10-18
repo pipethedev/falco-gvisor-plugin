@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -50,7 +51,7 @@ func main() {
 }
 
 func moduleDir(module string) (string, error) {
-	out, err := exec.Command("go", "mod", "download", "-json", module).Output()
+	out, err := exec.CommandContext(context.Background(), "go", "mod", "download", "-json", module).Output()
 	if err != nil {
 		return "", fmt.Errorf("download %s: %w", module, err)
 	}

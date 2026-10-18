@@ -30,7 +30,7 @@ func shortSocketPath(t *testing.T) string {
 
 func TestDockerFetcher(t *testing.T) {
 	path := shortSocketPath(t)
-	listener, err := net.Listen(networkUnix, path)
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), networkUnix, path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func (f *fakeCRI) PodSandboxStatus(_ context.Context, req *runtime.PodSandboxSta
 
 func TestCRIFetcher(t *testing.T) {
 	path := shortSocketPath(t)
-	listener, err := net.Listen(networkUnix, path)
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), networkUnix, path)
 	if err != nil {
 		t.Fatal(err)
 	}

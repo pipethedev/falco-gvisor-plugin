@@ -14,7 +14,7 @@ func buildPlugin(t *testing.T) string {
 		t.Skip("builds the shared library")
 	}
 	out := filepath.Join(t.TempDir(), "libgvisor.so")
-	cmd := exec.Command("go", "build", "-buildmode=c-shared", "-o", out, ".")
+	cmd := exec.CommandContext(t.Context(), "go", "build", "-buildmode=c-shared", "-o", out, ".")
 	if msg, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build plugin: %v\n%s", err, msg)
 	}

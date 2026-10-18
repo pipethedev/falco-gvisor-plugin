@@ -1,6 +1,7 @@
 package gvisor
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -286,7 +287,8 @@ func removeStaleSocket(path string) error {
 	if info.Mode().Type() != fs.ModeSocket {
 		return fmt.Errorf("%s exists and is not a socket", path)
 	}
-	if conn, err := net.DialTimeout(networkUnixPacket, path, staleProbeTimeout); err == nil {
+	dialer := &net.Dialer{Timeout: staleProbeTimeout}
+	if conn, err := dialer.DialContext(context.Background(), networkUnixPacket, path); err == nil {
 		_ = conn.Close()
 		return fmt.Errorf("%w: %s", errSocketInUse, path)
 	}
