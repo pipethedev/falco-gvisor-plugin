@@ -1,0 +1,46 @@
+name: perf
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  perf:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install gVisor runtimes (baseline, lean, full)
+        run: |
+          curl -fsSL https://gvisor.dev/archive.key | sudo gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" | sudo tee /etc/apt/sources.list.d/gvisor.list
+          sudo apt-get update && sudo apt-get install -y runsc
+          sudo install -D -m 0644 deploy/gvisor-pod-init.json /etc/falco/gvisor-pod-init.json
+          sudo install -D -m 0644 deploy/pod-init-full.json /etc/falco/pod-init-full.json
+          sudo runsc install --runtime=runsc
+          sudo runsc install --runtime=runsc-lean -- --pod-init-config=/etc/falco/gvisor-pod-init.json
+          sudo runsc install --runtime=runsc-full -- --pod-init-config=/etc/falco/pod-init-full.json
+          sudo systemctl restart docker
+      - name: Start Falco with the plugin
+        run: |
+          make image VERSION=0.1.0
+          sudo mkdir -p /run/falco
+          docker run -d --name falco --privileged --pid=host -e HOST_ROOT=/host \
+            -v /run/falco:/run/falco -v /var/run/docker.sock:/var/run/docker.sock \
+            -v /var/run/docker.sock:/host/var/run/docker.sock \
+            -v "$(command -v runsc):/usr/local/bin/runsc:ro" \
+            -v /run/docker/runtime-runc/moby:/run/docker/runtime-runc/moby \
+            -v /proc:/host/proc:ro -v /etc:/host/etc:ro \
+            falco-gvisor:0.1.0
+          timeout 90 sh -c 'until docker logs falco 2>&1 | grep -q "listening on"; do sleep 1; done'
+      - name: Benchmark
+        run: |
+          RUNS=30 REQUESTS=2000 ./test/perf/run.sh runsc runsc-lean runsc-full | tee perf-results.md
+          cat perf-results.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: perf-results
+          path: perf-results.md

@@ -1,0 +1,116 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FALCO_IMAGE: falcosecurity/falco:0.45.0
+
+jobs:
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          version: v2.15.0
+          install-mode: goinstall
+      - name: Generated files are up to date
+        run: |
+          make generate
+          git diff --exit-code
+      - name: Shell scripts
+        run: shellcheck rules/tests/run.sh rules/tools/pool_ips.sh test/integration/run.sh test/perf/run.sh
+
+  test:
+    strategy:
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Unit tests (race)
+        run: go test -race -count=1 -timeout 600s ./...
+
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build plugin and replay tool
+        run: |
+          mkdir -p dist/${{ matrix.arch }}
+          CGO_ENABLED=1 go build -trimpath -buildmode=c-shared -ldflags "-s -w" -o dist/${{ matrix.arch }}/libgvisor.so ./cmd/plugin
+          CGO_ENABLED=0 go build -trimpath -o dist/${{ matrix.arch }}/replay ./tools/replay
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin-${{ matrix.arch }}
+          path: dist/${{ matrix.arch }}
+
+  rules-test:
+    needs: build
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/download-artifact@v4
+        with:
+          name: plugin-${{ matrix.arch }}
+          path: dist/${{ matrix.arch }}
+      - name: Rules against Falco
+        run: |
+          chmod +x dist/${{ matrix.arch }}/replay
+          PLUGIN_DIR=$PWD/dist/${{ matrix.arch }} ./rules/tests/run.sh
+
+  integration:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install gVisor with monitoring enabled
+        run: |
+          curl -fsSL https://gvisor.dev/archive.key | sudo gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/gvisor-archive-keyring.gpg] https://storage.googleapis.com/gvisor/releases release main" | sudo tee /etc/apt/sources.list.d/gvisor.list
+          sudo apt-get update && sudo apt-get install -y runsc
+          sudo install -D -m 0644 deploy/gvisor-pod-init.json /etc/falco/gvisor-pod-init.json
+          sudo runsc install --runtime=runsc -- --pod-init-config=/etc/falco/gvisor-pod-init.json
+          sudo systemctl restart docker
+          docker info --format '{{json .Runtimes}}'
+      - name: Build image
+        run: make image VERSION=0.1.0
+      - name: Integration tests
+        run: IMAGE=falco-gvisor:0.1.0 ./test/integration/run.sh

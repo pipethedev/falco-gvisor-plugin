@@ -2,7 +2,7 @@ NAME := gvisor
 OUTPUT := lib$(NAME).so
 ARCHES := amd64 arm64
 GO ?= go
-GOLANGCI_VERSION ?= v2.6.2
+GOLANGCI_VERSION ?= v2.15.0
 LINT ?= $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 BUILDER_IMAGE ?= golang:1.27-bookworm
 FALCO_IMAGE ?= falcosecurity/falco:0.45.0
@@ -36,8 +36,8 @@ test-linux:
 	CGO_ENABLED=0 GOOS=linux GOARCH=$(HOST_ARCH) $(GO) test -c -o $(DIST)/gvisor.test ./pkg/gvisor
 	docker run --rm -v $(CURDIR)/$(DIST):/t --entrypoint /t/gvisor.test $(TEST_IMAGE) -test.count=1
 
-test-integration:
-	sudo -E ./test/integration/run.sh
+test-integration: image
+	IMAGE=falco-gvisor:$(VERSION) ./test/integration/run.sh
 
 rules-test: build-linux-$(HOST_ARCH)
 	FALCO_IMAGE=$(FALCO_IMAGE) PLUGIN_DIR=$(CURDIR)/$(DIST)/$(HOST_ARCH) ./rules/tests/run.sh
@@ -53,7 +53,7 @@ rules-tarball:
 	tar -czf $(DIST)/$(NAME)-rules-$(VERSION).tar.gz -C rules gvisor_rules.yaml tools
 
 image:
-	docker build -t falco-gvisor:$(VERSION) -f Dockerfile .
+	docker build --build-arg VERSION=$(VERSION) -t falco-gvisor:$(VERSION) -f Dockerfile .
 
 clean:
 	rm -rf $(OUTPUT) lib$(NAME).h $(DIST)

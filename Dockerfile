@@ -9,7 +9,7 @@ RUN go mod download
 COPY . .
 ARG VERSION=0.1.0
 RUN CGO_ENABLED=1 go build -trimpath -buildmode=c-shared \
-      -ldflags "-s -w -X github.com/falcosecurity/plugins/plugins/gvisor/pkg/gvisor.PluginVersion=${VERSION}" \
+      -ldflags "-s -w -X github.com/falcosecurity/plugins/plugins/gvisor/pkg/gvisor.PluginVersion=${VERSION#v}" \
       -o /out/libgvisor.so ./cmd/plugin
 
 FROM ${FALCO_IMAGE}

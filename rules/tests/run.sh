@@ -58,7 +58,11 @@ for _ in $(seq "${STARTUP_TIMEOUT}"); do
   sleep 1
 done
 
-docker exec "${NAME}" /plugin/replay send -socket /run/falco/gvisor.sock $(cd "${ROOT}" && ls rules/tests/*.json | sed 's#^rules/#/rules/#')
+fixtures=()
+for f in "${ROOT}"/rules/tests/*.json; do
+  fixtures+=("/rules/tests/$(basename "${f}")")
+done
+docker exec "${NAME}" /plugin/replay send -socket /run/falco/gvisor.sock "${fixtures[@]}"
 sleep "${SETTLE_SECONDS}"
 docker logs "${NAME}" > "${WORK}/falco.log" 2>&1
 
