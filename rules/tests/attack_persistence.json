@@ -1,0 +1,34 @@
+{
+  "description": "authorized_keys and crontab written (full profile).",
+  "expect": [
+    "gVisor Write to Cron or SSH Authorized Keys"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "syscall/openat",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "path": "/root/.ssh/authorized_keys",
+      "flags": "O_WRONLY|O_APPEND|O_CREAT"
+    },
+    {
+      "point": "syscall/openat",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "path": "/etc/crontab",
+      "flags": "O_WRONLY|O_TRUNC"
+    }
+  ]
+}

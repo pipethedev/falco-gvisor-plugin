@@ -1,0 +1,30 @@
+{
+  "description": "nmap run inside the sandbox.",
+  "expect": [
+    "gVisor Network Scanner Executed"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "nmap",
+      "exe": "/usr/bin/nmap",
+      "argv": [
+        "nmap",
+        "-sS",
+        "10.0.0.0/24"
+      ]
+    }
+  ]
+}

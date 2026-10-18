@@ -1,0 +1,43 @@
+{
+  "description": "IMDS queried over IPv4 and IPv6.",
+  "expect": [
+    "gVisor Connection to Cloud Metadata Service"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "curl",
+      "exe": "/usr/bin/curl",
+      "argv": [
+        "curl",
+        "http://169.254.169.254/latest/meta-data/iam/"
+      ]
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "curl",
+      "addr": "169.254.169.254:80"
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "curl",
+      "addr": "[fd00:ec2::254]:80"
+    }
+  ]
+}

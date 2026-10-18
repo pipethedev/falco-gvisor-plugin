@@ -70,3 +70,13 @@ func (p Point) Sysno() (uint64, bool) {
 	}
 	return 0, false
 }
+
+// SyscallNumber returns the syscall number of name on the build architecture.
+func SyscallNumber(name string) (uint64, bool) {
+	for nr, n := range syscallNames {
+		if n == name {
+			return nr, true
+		}
+	}
+	return 0, false
+}

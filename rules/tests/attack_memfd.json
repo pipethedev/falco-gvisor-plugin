@@ -1,0 +1,29 @@
+{
+  "description": "Fileless execution from memfd.",
+  "expect": [
+    "gVisor Fileless Execution From Memfd"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "memfd:payload (",
+      "exe": "/memfd:payload (deleted)",
+      "argv": [
+        "[kworker/0:1]"
+      ],
+      "memfd": true
+    }
+  ]
+}

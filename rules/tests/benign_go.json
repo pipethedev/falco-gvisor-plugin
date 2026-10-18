@@ -1,0 +1,48 @@
+{
+  "description": "Static Go service with TLS outbound calls.",
+  "expect": [],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "server",
+      "exe": "/app/server",
+      "argv": [
+        "/app/server",
+        "--listen",
+        ":8080"
+      ]
+    },
+    {
+      "point": "syscall/openat",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "server",
+      "path": "/etc/ssl/certs/ca-certificates.crt",
+      "flags": "O_RDONLY"
+    },
+    {
+      "point": "syscall/socket",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "server",
+      "domain": "AF_INET6",
+      "type": "SOCK_STREAM"
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "server",
+      "addr": "10.1.2.3:8080"
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "server",
+      "addr": "[2001:db8::10]:443"
+    }
+  ]
+}

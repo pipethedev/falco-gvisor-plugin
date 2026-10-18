@@ -1,0 +1,32 @@
+{
+  "description": "Renamed miner detected by its arguments.",
+  "expect": [
+    "gVisor Crypto Miner Arguments"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "worker",
+      "exe": "/opt/app/worker",
+      "argv": [
+        "worker",
+        "-o",
+        "stratum+ssl://pool.example:443",
+        "-a",
+        "rx/0"
+      ]
+    }
+  ]
+}

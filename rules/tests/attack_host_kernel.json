@@ -1,0 +1,34 @@
+{
+  "description": "sysrq-trigger and /sys/kernel writes (full profile).",
+  "expect": [
+    "gVisor Host Kernel Interface Tampering"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "syscall/openat",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "path": "/proc/sysrq-trigger",
+      "flags": "O_WRONLY"
+    },
+    {
+      "point": "syscall/openat",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "path": "/sys/kernel/uevent_helper",
+      "flags": "O_WRONLY|O_TRUNC"
+    }
+  ]
+}

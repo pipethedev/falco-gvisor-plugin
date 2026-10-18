@@ -1,0 +1,29 @@
+{
+  "description": "Payload downloaded to /dev/shm and executed.",
+  "expect": [
+    "gVisor Dropped Binary Executed From Temp Directory"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "update",
+      "exe": "/dev/shm/.cache/update",
+      "argv": [
+        "/dev/shm/.cache/update"
+      ],
+      "upper_layer": true
+    }
+  ]
+}

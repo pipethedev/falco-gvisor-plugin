@@ -1,0 +1,95 @@
+{
+  "description": "Node.js API talking to Postgres and Redis.",
+  "expect": [],
+  "events": [
+    {
+      "point": "container/start",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "node",
+      "argv": [
+        "node",
+        "server.js"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "node",
+      "exe": "/usr/local/bin/node",
+      "argv": [
+        "node",
+        "server.js"
+      ],
+      "cwd": "/app"
+    },
+    {
+      "point": "sentry/clone",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "node",
+      "child": 20
+    },
+    {
+      "point": "syscall/socket",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "node",
+      "domain": "AF_INET",
+      "type": "SOCK_STREAM"
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "node",
+      "addr": "10.0.0.5:5432"
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "node",
+      "addr": "10.0.0.6:6379"
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "node",
+      "addr": "140.82.112.3:443"
+    },
+    {
+      "point": "syscall/openat",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "node",
+      "path": "/app/package.json",
+      "flags": "O_RDONLY"
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 21,
+      "ppid": 1,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "sh",
+        "-c",
+        "node scripts/migrate.js"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 22,
+      "ppid": 21,
+      "comm": "node",
+      "exe": "/usr/local/bin/node",
+      "argv": [
+        "node",
+        "scripts/migrate.js"
+      ]
+    }
+  ]
+}

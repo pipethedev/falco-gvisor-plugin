@@ -1,0 +1,37 @@
+{
+  "description": "Service account token read (full profile).",
+  "expect": [
+    "gVisor Service Account Token Read"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "cat",
+      "exe": "/bin/cat",
+      "argv": [
+        "cat",
+        "/var/run/secrets/kubernetes.io/serviceaccount/token"
+      ]
+    },
+    {
+      "point": "syscall/openat",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "cat",
+      "path": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+      "flags": "O_RDONLY"
+    }
+  ]
+}

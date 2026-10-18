@@ -1,0 +1,35 @@
+{
+  "description": "nsenter executed.",
+  "expect": [
+    "gVisor Namespace or Mount Tool Executed"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "nsenter",
+      "exe": "/usr/bin/nsenter",
+      "argv": [
+        "nsenter",
+        "-t",
+        "1",
+        "-m",
+        "-u",
+        "-i",
+        "-n",
+        "sh"
+      ]
+    }
+  ]
+}

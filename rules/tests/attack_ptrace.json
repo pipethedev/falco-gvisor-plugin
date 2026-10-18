@@ -1,0 +1,37 @@
+{
+  "description": "ptrace attach to a sibling process.",
+  "expect": [
+    "gVisor Ptrace Attach"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "gdb",
+      "exe": "/usr/bin/gdb",
+      "argv": [
+        "gdb",
+        "-p",
+        "7"
+      ]
+    },
+    {
+      "point": "syscall/ptrace",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "gdb",
+      "request": "PTRACE_ATTACH"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "description": "Packet socket opened by a script.",
+  "expect": [
+    "gVisor Raw Socket Created"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "python3",
+      "exe": "/usr/bin/python3",
+      "argv": [
+        "python3",
+        "sniff.py"
+      ]
+    },
+    {
+      "point": "syscall/socket",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "python3",
+      "domain": "AF_PACKET",
+      "type": "SOCK_RAW"
+    }
+  ]
+}

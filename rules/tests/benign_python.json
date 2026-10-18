@@ -1,0 +1,77 @@
+{
+  "description": "Django app installing a dependency and running migrations.",
+  "expect": [],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "gunicorn",
+      "exe": "/usr/local/bin/gunicorn",
+      "argv": [
+        "gunicorn",
+        "app.wsgi",
+        "-b",
+        "0.0.0.0:8000"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "sh",
+        "-c",
+        "pip install requests && python manage.py migrate"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 3,
+      "ppid": 2,
+      "comm": "pip",
+      "exe": "/usr/local/bin/pip",
+      "argv": [
+        "pip",
+        "install",
+        "requests"
+      ]
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 3,
+      "ppid": 2,
+      "comm": "pip",
+      "addr": "151.101.0.223:443"
+    },
+    {
+      "point": "syscall/openat",
+      "pid": 3,
+      "ppid": 2,
+      "comm": "pip",
+      "path": "/usr/local/lib/python3.12/site-packages/requests/__init__.py",
+      "flags": "O_WRONLY|O_CREAT|O_TRUNC"
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 4,
+      "ppid": 2,
+      "comm": "python3",
+      "exe": "/usr/local/bin/python3",
+      "argv": [
+        "python",
+        "manage.py",
+        "migrate"
+      ]
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 4,
+      "ppid": 2,
+      "comm": "python",
+      "addr": "10.0.0.5:5432"
+    }
+  ]
+}

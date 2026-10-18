@@ -1,0 +1,42 @@
+{
+  "description": "Miner copied to /tmp and run with stratum arguments (mirrors the spec integration fixture). Falco's default rule_matching=first reports one rule per event, so the exec raises only the miner alert.",
+  "expect": [
+    "gVisor Crypto Miner Executed",
+    "gVisor Connection to Mining Pool Port"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "xmrig",
+      "exe": "/tmp/xmrig",
+      "argv": [
+        "/tmp/xmrig",
+        "--donate-level",
+        "1",
+        "-o",
+        "stratum+tcp://example.invalid:3333"
+      ],
+      "upper_layer": true
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "xmrig",
+      "addr": "198.51.100.7:3333",
+      "errno": 115
+    }
+  ]
+}

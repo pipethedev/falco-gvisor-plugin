@@ -1,0 +1,62 @@
+{
+  "description": "nginx master and workers serving traffic and writing logs.",
+  "expect": [],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "nginx",
+      "exe": "/usr/sbin/nginx",
+      "argv": [
+        "nginx",
+        "-g",
+        "daemon off;"
+      ]
+    },
+    {
+      "point": "syscall/openat",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "nginx",
+      "path": "/etc/nginx/nginx.conf",
+      "flags": "O_RDONLY"
+    },
+    {
+      "point": "sentry/clone",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "nginx",
+      "child": 2
+    },
+    {
+      "point": "syscall/socket",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "nginx",
+      "domain": "AF_INET",
+      "type": "SOCK_STREAM"
+    },
+    {
+      "point": "syscall/openat",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "nginx",
+      "path": "/var/log/nginx/access.log",
+      "flags": "O_WRONLY|O_APPEND|O_CREAT"
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "nginx",
+      "addr": "10.0.0.20:3000"
+    },
+    {
+      "point": "sentry/task_exit",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "nginx"
+    }
+  ]
+}

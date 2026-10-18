@@ -1,0 +1,36 @@
+{
+  "description": "Web app relaying mail directly.",
+  "expect": [
+    "gVisor Outbound SMTP From Non-Mail Workload"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "python3",
+      "exe": "/usr/bin/python3",
+      "argv": [
+        "python3",
+        "app.py"
+      ]
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "python3",
+      "addr": "203.0.113.5:25"
+    }
+  ]
+}

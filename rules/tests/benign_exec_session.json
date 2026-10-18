@@ -1,0 +1,69 @@
+{
+  "description": "Operator exec session: shell, package manager, ping.",
+  "expect": [],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 30,
+      "ppid": 0,
+      "comm": "bash",
+      "exe": "/bin/bash",
+      "argv": [
+        "bash"
+      ],
+      "stdin": "file",
+      "stdout": "file"
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 31,
+      "ppid": 30,
+      "comm": "apt-get",
+      "exe": "/usr/bin/apt-get",
+      "argv": [
+        "apt-get",
+        "update"
+      ]
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 31,
+      "ppid": 30,
+      "comm": "apt-get",
+      "addr": "151.101.130.132:80"
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 32,
+      "ppid": 30,
+      "comm": "ping",
+      "exe": "/bin/ping",
+      "argv": [
+        "ping",
+        "-c",
+        "1",
+        "10.0.0.1"
+      ]
+    },
+    {
+      "point": "syscall/socket",
+      "pid": 32,
+      "ppid": 30,
+      "comm": "ping",
+      "domain": "AF_INET",
+      "type": "SOCK_RAW"
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 33,
+      "ppid": 30,
+      "comm": "ls",
+      "exe": "/bin/ls",
+      "argv": [
+        "ls",
+        "-la",
+        "/tmp"
+      ]
+    }
+  ]
+}

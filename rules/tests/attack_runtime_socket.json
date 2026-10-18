@@ -1,0 +1,38 @@
+{
+  "description": "curl talking to a mounted Docker socket.",
+  "expect": [
+    "gVisor Container Runtime Socket Access"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "curl",
+      "exe": "/usr/bin/curl",
+      "argv": [
+        "curl",
+        "--unix-socket",
+        "/var/run/docker.sock",
+        "http://localhost/containers/json"
+      ]
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "curl",
+      "addr": "unix:/var/run/docker.sock"
+    }
+  ]
+}

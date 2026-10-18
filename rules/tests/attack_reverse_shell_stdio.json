@@ -1,0 +1,31 @@
+{
+  "description": "bash with stdio on a TCP socket.",
+  "expect": [
+    "gVisor Shell With Network Socket Stdio"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "bash",
+      "exe": "/bin/bash",
+      "argv": [
+        "bash",
+        "-i"
+      ],
+      "stdin": "ipv4",
+      "stdout": "ipv4"
+    }
+  ]
+}
