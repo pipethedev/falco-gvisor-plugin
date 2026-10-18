@@ -98,6 +98,7 @@ var statsExtractors = map[string]func(StatsSnapshot) any{
 	fieldStatsUnmonitored:     func(s StatsSnapshot) any { return uint64(max(s.UnmonitoredSandboxes, 0)) },
 	fieldStatsAttacherFailed:  func(s StatsSnapshot) any { return s.AttacherFailed },
 	fieldStatsPeerRejected:    func(s StatsSnapshot) any { return s.PeerRejected },
+	fieldStatsPanics:          func(s StatsSnapshot) any { return s.Panics },
 }
 
 // ExtractField returns the value of a field for an event and whether the

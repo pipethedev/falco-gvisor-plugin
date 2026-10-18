@@ -33,6 +33,7 @@ type MetadataCache struct {
 	allowlist map[string]struct{}
 	now       func() time.Time
 	maxItems  int
+	stats     *Stats
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -46,7 +47,7 @@ type MetadataCache struct {
 
 // NewMetadataCache returns a cache over fetcher. A nil fetcher disables
 // metadata and every lookup returns nil.
-func NewMetadataCache(fetcher MetadataFetcher, ttl time.Duration, allowlist []string) *MetadataCache {
+func NewMetadataCache(fetcher MetadataFetcher, ttl time.Duration, allowlist []string, stats *Stats) *MetadataCache {
 	ctx, cancel := context.WithCancel(context.Background())
 	allowed := make(map[string]struct{}, len(allowlist))
 	for _, key := range allowlist {
@@ -58,6 +59,7 @@ func NewMetadataCache(fetcher MetadataFetcher, ttl time.Duration, allowlist []st
 		allowlist: allowed,
 		now:       time.Now,
 		maxItems:  metadataMaxEntries,
+		stats:     stats,
 		ctx:       ctx,
 		cancel:    cancel,
 		sem:       make(chan struct{}, metadataConcurrency),
@@ -148,7 +150,11 @@ func (m *MetadataCache) fetch(containerID string) {
 
 	ctx, cancel := context.WithTimeout(m.ctx, metadataFetchTimeout)
 	defer cancel()
-	info, err := m.fetcher.Fetch(ctx, containerID)
+	var info *ContainerInfo
+	var err error
+	if perr := guard(m.stats, "metadata fetch", func() { info, err = m.fetcher.Fetch(ctx, containerID) }); perr != nil {
+		info, err = nil, perr
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()

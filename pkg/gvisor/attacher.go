@@ -84,7 +84,7 @@ func NewAttacher(cfg Config, runner Runner, conns ConnectionLister, stats *Stats
 // until ctx is cancelled. A zero interval disables periodic sweeps.
 func (a *Attacher) Run(ctx context.Context, attachNow bool, interval time.Duration) {
 	if attachNow {
-		a.Sweep(ctx)
+		_ = guard(a.stats, "attacher sweep", func() { a.Sweep(ctx) })
 	}
 	if interval <= 0 {
 		return
@@ -96,7 +96,7 @@ func (a *Attacher) Run(ctx context.Context, attachNow bool, interval time.Durati
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			a.Sweep(ctx)
+			_ = guard(a.stats, "attacher sweep", func() { a.Sweep(ctx) })
 		}
 	}
 }
@@ -130,7 +130,8 @@ func (a *Attacher) Sweep(ctx context.Context) {
 		}
 		wg.Go(func() {
 			defer func() { <-sem }()
-			if !a.attach(ctx, id) {
+			attached := false
+			if err := guard(a.stats, "attach", func() { attached = a.attach(ctx, id) }); err != nil || !attached {
 				unmonitored.Add(1)
 			}
 		})

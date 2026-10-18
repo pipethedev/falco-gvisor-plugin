@@ -158,30 +158,39 @@ func (s *Server) Connections() []ConnInfo {
 func (s *Server) acceptLoop() {
 	defer s.wg.Done()
 	for {
-		conn, err := s.listener.AcceptUnix()
-		if err != nil {
-			if errors.Is(err, net.ErrClosed) {
-				return
-			}
-			logger.Printf("accept: %v", err)
-			time.Sleep(acceptRetryDelay)
-			continue
-		}
-		pid, uid, credOK := peerCred(conn)
-		if credOK && !allowedPeer(uid, os.Geteuid()) {
-			s.stats.PeerRejected.Add(1)
-			logger.Printf("rejected connection from pid %d: %v (uid %d)", pid, errUntrustedPeer, uid)
-			_ = conn.Close()
-			continue
-		}
-		sc := &sandboxConn{id: s.nextID.Add(1), conn: conn, peerPID: pid, containerIDs: map[string]struct{}{}}
-		if !s.track(sc) {
-			_ = conn.Close()
+		keepGoing := true
+		_ = guard(s.stats, "accept loop", func() { keepGoing = s.acceptOne() })
+		if !keepGoing {
 			return
 		}
-		s.wg.Add(1)
-		go s.serve(sc)
 	}
+}
+
+func (s *Server) acceptOne() bool {
+	conn, err := s.listener.AcceptUnix()
+	if err != nil {
+		if errors.Is(err, net.ErrClosed) {
+			return false
+		}
+		logger.Printf("accept: %v", err)
+		time.Sleep(acceptRetryDelay)
+		return true
+	}
+	pid, uid, credOK := peerCred(conn)
+	if credOK && !allowedPeer(uid, os.Geteuid()) {
+		s.stats.PeerRejected.Add(1)
+		logger.Printf("rejected connection from pid %d: %v (uid %d)", pid, errUntrustedPeer, uid)
+		_ = conn.Close()
+		return true
+	}
+	sc := &sandboxConn{id: s.nextID.Add(1), conn: conn, peerPID: pid, containerIDs: map[string]struct{}{}}
+	if !s.track(sc) {
+		_ = conn.Close()
+		return false
+	}
+	s.wg.Add(1)
+	go s.serve(sc)
+	return true
 }
 
 func (s *Server) track(sc *sandboxConn) bool {
@@ -237,7 +246,9 @@ func (s *Server) serve(sc *sandboxConn) {
 		}
 		s.stats.DropSandbox.Add(uint64(point.Dropped - lastDropped))
 		lastDropped = point.Dropped
-		s.handlePoint(sc, table, point)
+		if err := guard(s.stats, "point processing", func() { s.handlePoint(sc, table, point) }); err != nil {
+			s.stats.DropPanic.Add(1)
+		}
 	}
 }
 

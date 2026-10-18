@@ -150,7 +150,7 @@ func TestServerEnrichesEvents(t *testing.T) {
 func TestServerWaitsForFirstContainerMetadata(t *testing.T) {
 	c := newCollector(4)
 	stub := &stubFetcher{info: &ContainerInfo{ID: testContainerID, Name: "web"}, release: make(chan struct{})}
-	cache := NewMetadataCache(stub, time.Minute, nil)
+	cache := NewMetadataCache(stub, time.Minute, nil, &Stats{})
 	t.Cleanup(func() { _ = cache.Close() })
 	srv, _ := startServer(t, nil, c, cache)
 	conn := connectSandbox(t, srv.socketPath)
@@ -166,6 +166,44 @@ func TestServerWaitsForFirstContainerMetadata(t *testing.T) {
 	if evt.Context.Container == nil || evt.Context.Container.Name != "web" {
 		t.Errorf("first event of a new container lacks metadata resolved within metadataWaitMillis: %+v", evt.Context.Container)
 	}
+}
+
+type panickingResolver struct{ fakeResolver }
+
+func (p panickingResolver) Lookup(id string) *ContainerInfo {
+	if id == "boom" {
+		panic("resolver bug")
+	}
+	return p.fakeResolver.Lookup(id)
+}
+
+func (p panickingResolver) Await(id string, d time.Duration) *ContainerInfo { return p.Lookup(id) }
+
+func TestServerSurvivesPanicInPointProcessing(t *testing.T) {
+	c := newCollector(4)
+	srv, stats := startServer(t, nil, c, panickingResolver{fakeResolver{}})
+	conn := connectSandbox(t, srv.socketPath)
+
+	bad := testContext(1, 0, "sh")
+	bad.ContainerId = "boom"
+	send(t, conn, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{ContextData: bad, BinaryPath: "/bin/sh"}))
+	send(t, conn, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{ContextData: testContext(2, 1, "id"), BinaryPath: "/usr/bin/id", Argv: []string{"id"}}))
+
+	if evt := c.next(t); evt.Context.Process.Comm != "id" {
+		t.Errorf("the point after a panic was not processed: %+v", evt.Context.Process)
+	}
+	if stats.Panics.Load() != 1 || stats.DropPanic.Load() != 1 || stats.Connections.Load() != 1 {
+		t.Errorf("panics=%d drops=%d connections=%d", stats.Panics.Load(), stats.DropPanic.Load(), stats.Connections.Load())
+	}
+}
+
+func TestServerReleasesClosedConnections(t *testing.T) {
+	c := newCollector(1)
+	srv, stats := startServer(t, nil, c, fakeResolver{})
+	conn := connectSandbox(t, srv.socketPath)
+	waitFor(t, "connection", func() bool { return stats.Connections.Load() == 1 })
+	_ = conn.Close()
+	waitFor(t, "connection release", func() bool { return stats.Connections.Load() == 0 && len(srv.Connections()) == 0 })
 }
 
 func TestServerRejectsBadHandshakeOnly(t *testing.T) {

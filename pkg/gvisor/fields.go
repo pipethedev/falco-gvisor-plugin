@@ -103,6 +103,7 @@ const (
 	fieldStatsUnmonitored     = "gvisor.stats.unmonitored_sandboxes"
 	fieldStatsAttacherFailed  = "gvisor.stats.attacher_failed"
 	fieldStatsPeerRejected    = "gvisor.stats.peer_rejected"
+	fieldStatsPanics          = "gvisor.stats.panics"
 )
 
 func field(name, typ, desc string) FieldDef {
@@ -191,6 +192,7 @@ var fieldDefs = []FieldDef{
 	field(fieldStatsAttachFailures, typeUint64, "gvisor_stats: failed attach attempts."),
 	field(fieldStatsQueueBytes, typeUint64, "gvisor_stats: bytes of events waiting for Falco (bounded by maxQueueBytes)."),
 	field(fieldStatsUnmonitored, typeUint64, "gvisor_stats: running sandboxes the last attacher sweep found unconnected and failed to attach."),
+	field(fieldStatsPanics, typeUint64, "gvisor_stats: panics recovered inside the plugin (each is a bug; the affected point or fetch is dropped)."),
 	field(fieldStatsPeerRejected, typeUint64, "gvisor_stats: connections refused because the peer was neither root nor Falco's user."),
 	field(fieldStatsAttacherFailed, typeBool, "gvisor_stats: true when the last attacher sweep could not list sandboxes (runsc or its state root unreachable)."),
 }

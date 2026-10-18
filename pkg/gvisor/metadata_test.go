@@ -198,7 +198,7 @@ func TestMetadataCacheAsyncAndTTL(t *testing.T) {
 		info:    &ContainerInfo{ID: testContainerID, Name: "web", Labels: map[string]string{"app": "web", "secret-ish": "x"}},
 		release: make(chan struct{}),
 	}
-	cache := NewMetadataCache(stub, time.Minute, []string{"app"})
+	cache := NewMetadataCache(stub, time.Minute, []string{"app"}, &Stats{})
 	t.Cleanup(func() { _ = cache.Close() })
 	clock := time.Unix(1000, 0)
 	var clockMu sync.Mutex
@@ -231,7 +231,7 @@ func TestMetadataCacheAsyncAndTTL(t *testing.T) {
 
 func TestMetadataCacheProviderDown(t *testing.T) {
 	stub := &stubFetcher{err: errors.New("connection refused")}
-	cache := NewMetadataCache(stub, time.Minute, nil)
+	cache := NewMetadataCache(stub, time.Minute, nil, &Stats{})
 	t.Cleanup(func() { _ = cache.Close() })
 	cache.Lookup(testContainerID)
 	waitFor(t, "failed fetch", func() bool { return stub.callCount() == 1 })
@@ -247,7 +247,7 @@ func TestMetadataCacheProviderDown(t *testing.T) {
 
 func TestMetadataCacheBounded(t *testing.T) {
 	stub := &stubFetcher{info: &ContainerInfo{Name: "x"}}
-	cache := NewMetadataCache(stub, time.Minute, nil)
+	cache := NewMetadataCache(stub, time.Minute, nil, &Stats{})
 	t.Cleanup(func() { _ = cache.Close() })
 	cache.maxItems = 3
 	for i := range 10 {
@@ -263,8 +263,30 @@ func TestMetadataCacheBounded(t *testing.T) {
 	}
 }
 
+type panickingFetcher struct{}
+
+func (panickingFetcher) Fetch(context.Context, string) (*ContainerInfo, error) { panic("fetcher bug") }
+
+func (panickingFetcher) Close() error { return nil }
+
+func TestMetadataCacheFetchPanic(t *testing.T) {
+	stats := &Stats{}
+	cache := NewMetadataCache(panickingFetcher{}, time.Minute, nil, stats)
+	t.Cleanup(func() { _ = cache.Close() })
+	start := time.Now()
+	if info := cache.Await(testContainerID, testWait); info != nil {
+		t.Errorf("metadata from a panicking fetcher: %+v", info)
+	}
+	if time.Since(start) > testWait/2 {
+		t.Error("a panicking fetch left Await waiting for its full timeout")
+	}
+	if stats.Panics.Load() != 1 {
+		t.Errorf("panics = %d", stats.Panics.Load())
+	}
+}
+
 func TestMetadataCacheDisabled(t *testing.T) {
-	cache := NewMetadataCache(nil, time.Minute, nil)
+	cache := NewMetadataCache(nil, time.Minute, nil, &Stats{})
 	if cache.Lookup(testContainerID) != nil {
 		t.Error("none provider must return nil")
 	}
@@ -275,7 +297,7 @@ func TestMetadataCacheDisabled(t *testing.T) {
 
 func TestMetadataCacheAwait(t *testing.T) {
 	stub := &stubFetcher{info: &ContainerInfo{ID: testContainerID, Name: "web"}, release: make(chan struct{})}
-	cache := NewMetadataCache(stub, time.Minute, nil)
+	cache := NewMetadataCache(stub, time.Minute, nil, &Stats{})
 	t.Cleanup(func() { _ = cache.Close() })
 
 	start := time.Now()

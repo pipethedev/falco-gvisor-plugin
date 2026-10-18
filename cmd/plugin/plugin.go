@@ -82,7 +82,8 @@ func (p *gvisorPlugin) Fields() []sdk.FieldEntry {
 	return entries
 }
 
-func (p *gvisorPlugin) Extract(req sdk.ExtractRequest, evt sdk.EventReader) error {
+func (p *gvisorPlugin) Extract(req sdk.ExtractRequest, evt sdk.EventReader) (err error) {
+	defer recoverInto(&err, "extract "+req.Field())
 	decoded, err := p.decode(evt)
 	if err != nil {
 		return err
@@ -94,7 +95,8 @@ func (p *gvisorPlugin) Extract(req sdk.ExtractRequest, evt sdk.EventReader) erro
 	return nil
 }
 
-func (p *gvisorPlugin) String(evt sdk.EventReader) (string, error) {
+func (p *gvisorPlugin) String(evt sdk.EventReader) (_ string, err error) {
+	defer recoverInto(&err, "event to string")
 	decoded, err := p.decode(evt)
 	if err != nil {
 		return "", err
@@ -144,4 +146,10 @@ func (p *gvisorPlugin) Open(string) (source.Instance, error) {
 		return nil, err
 	}
 	return instance, nil
+}
+
+func recoverInto(err *error, what string) {
+	if r := recover(); r != nil {
+		*err = fmt.Errorf("%s: recovered panic: %v", what, r)
+	}
 }

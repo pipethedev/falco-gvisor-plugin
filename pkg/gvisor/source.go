@@ -32,7 +32,7 @@ func StartSource(cfg Config, runner Runner) (*Source, error) {
 	src := &Source{
 		queue:    newEventQueue(cfg.MaxQueueBytes, minQueueShareEvents*int(MaxPluginEventSize(cfg)), stats),
 		stats:    stats,
-		metadata: NewMetadataCache(fetcher, cfg.metadataCacheTTL(), cfg.LabelAllowlist),
+		metadata: NewMetadataCache(fetcher, cfg.metadataCacheTTL(), cfg.LabelAllowlist, stats),
 	}
 	src.server = NewServer(cfg, src.queue.push, src.metadata, src.stats)
 	if err := src.server.Start(); err != nil {
@@ -93,15 +93,15 @@ func (s *Source) reportStats(ctx context.Context, interval time.Duration) {
 		case now := <-ticker.C:
 			snap := s.stats.Snapshot(prev, now)
 			prev = snap
-			s.publishStats(snap, now)
+			_ = guard(s.stats, "stats report", func() { s.publishStats(snap, now) })
 		}
 	}
 }
 
 func (s *Source) publishStats(snap StatsSnapshot, now time.Time) {
-	logger.Printf("stats: connections=%d events/s=%.1f queue_bytes=%d drops=%d (queue_full=%d queue_share=%d truncated=%d decode=%d unsupported=%d oversize=%d sandbox=%d) attach_failures=%d/%d unmonitored=%d attacher_failed=%t peer_rejected=%d",
+	logger.Printf("stats: connections=%d events/s=%.1f queue_bytes=%d drops=%d (queue_full=%d queue_share=%d truncated=%d decode=%d unsupported=%d oversize=%d sandbox=%d) attach_failures=%d/%d unmonitored=%d attacher_failed=%t peer_rejected=%d panics=%d",
 		snap.Connections, snap.EventsPerSecond, snap.QueueBytes, snap.TotalDrops(), snap.DropChannelFull, snap.DropQueueShare, snap.DropTruncated,
-		snap.DropDecodeError, snap.DropUnsupported, snap.DropContextSize, snap.DropSandbox, snap.AttachFailures, snap.AttachAttempts, snap.UnmonitoredSandboxes, snap.AttacherFailed, snap.PeerRejected)
+		snap.DropDecodeError, snap.DropUnsupported, snap.DropContextSize, snap.DropSandbox, snap.AttachFailures, snap.AttachAttempts, snap.UnmonitoredSandboxes, snap.AttacherFailed, snap.PeerRejected, snap.Panics)
 	data, err := EncodeStats(snap)
 	if err != nil {
 		logger.Printf("stats event: %v", err)
