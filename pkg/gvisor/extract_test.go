@@ -178,8 +178,10 @@ func TestExtractExecAndContainer(t *testing.T) {
 		Argv:                 []string{"/tmp/xmrig", "-o", "stratum+tcp://pool:3333"},
 		BinaryOverlayfsUpper: true,
 		Stdin:                &pb.FdInfo{Socket: &pb.SocketInfo{Family: linux.AF_INET}},
+		PipeInputProc:        &pb.PipeProcInfo{ContextData: &pb.ContextData{ProcessName: "curl"}},
 	})
 	want := map[string]any{
+		fieldGvisorStdinPipeProc: "curl",
 		fieldEvtType:             evtTypeSentryExecve,
 		fieldProcName:            "xmrig",
 		fieldProcExe:             "/tmp/xmrig",
@@ -285,7 +287,7 @@ func TestEveryFieldHasExtractorAndType(t *testing.T) {
 		eventFor(t, pb.MessageType_MESSAGE_SYSCALL_OPEN, &pb.Open{ContextData: testContext(42, 1, "c"), Exit: &pb.Exit{}, Pathname: "/etc/x"}),
 		eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SOCKET, &pb.Socket{ContextData: testContext(42, 1, "c"), Exit: &pb.Exit{}, Domain: linux.AF_INET, Type: int32(linux.SOCK_STREAM)}),
 		eventFor(t, pb.MessageType_MESSAGE_SYSCALL_PTRACE, &pb.Ptrace{ContextData: testContext(42, 1, "c"), Exit: &pb.Exit{}}),
-		eventFor(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{ContextData: testContext(42, 1, "c"), BinaryPath: "/x", BinarySha256: []byte{1}, Stdin: &pb.FdInfo{Mode: linux.S_IFIFO}, Stdout: &pb.FdInfo{Mode: linux.S_IFIFO}, Stderr: &pb.FdInfo{Mode: linux.S_IFIFO}}),
+		eventFor(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{ContextData: testContext(42, 1, "c"), BinaryPath: "/x", BinarySha256: []byte{1}, Stdin: &pb.FdInfo{Mode: linux.S_IFIFO}, Stdout: &pb.FdInfo{Mode: linux.S_IFIFO}, Stderr: &pb.FdInfo{Mode: linux.S_IFIFO}, PipeInputProc: &pb.PipeProcInfo{ContextData: &pb.ContextData{ProcessName: "wget"}}}),
 		eventFor(t, pb.MessageType_MESSAGE_SENTRY_TASK_EXIT, &pb.TaskExit{ContextData: testContext(42, 1, "c")}),
 	}
 	statsData, err := EncodeStats(StatsSnapshot{})

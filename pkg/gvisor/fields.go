@@ -86,6 +86,7 @@ const (
 	fieldGvisorPoint         = "gvisor.point"
 	fieldGvisorANames        = "gvisor.anames"
 	fieldGvisorExitStatus    = "gvisor.exit_status"
+	fieldGvisorStdinPipeProc = "gvisor.stdin_pipe_proc"
 
 	fieldStatsConnections     = "gvisor.stats.connections"
 	fieldStatsEventsPerSecond = "gvisor.stats.events_per_second"
@@ -169,6 +170,7 @@ var fieldDefs = []FieldDef{
 	field(fieldGvisorPoint, typeString, "gVisor trace point, e.g. syscall/connect/exit or sentry/execve."),
 	{Name: fieldGvisorANames, Type: typeString, IsList: true, Desc: "Names of all known ancestors, nearest first; use with intersects / in."},
 	field(fieldGvisorExitStatus, typeUint64, "Exit status for task_exit and exit_notify_parent points."),
+	field(fieldGvisorStdinPipeProc, typeString, "Name of the process writing to this process's stdin pipe at exec, e.g. curl in curl | sh (requires pipe_proc_info on sentry/execve)."),
 
 	field(fieldStatsConnections, typeUint64, "gvisor_stats: live sandbox connections."),
 	field(fieldStatsEventsPerSecond, typeUint64, "gvisor_stats: events per second since the previous stats event."),

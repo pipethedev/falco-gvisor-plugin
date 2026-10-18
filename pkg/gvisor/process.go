@@ -52,6 +52,7 @@ type ProcessInfo struct {
 	StdoutType    string   `json:"stdout,omitempty"`
 	StderrType    string   `json:"stderr,omitempty"`
 	TTY           uint32   `json:"tty,omitempty"`
+	StdinPipeComm string   `json:"stdinpipe,omitempty"`
 }
 
 // Exe returns argv[0], or the exe path when argv is unknown.
@@ -112,6 +113,7 @@ func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
 	p.StdoutType = fdType(info.GetStdout())
 	p.StderrType = fdType(info.GetStderr())
 	p.TTY = ttyOf(info.GetStdin(), info.GetStdout(), info.GetStderr())
+	p.StdinPipeComm = truncateComm(info.GetPipeInputProc().GetContextData().GetProcessName())
 }
 
 func (p *ProcessInfo) applyStart(start *pb.Start) {
