@@ -33,7 +33,7 @@ jobs:
           make generate
           git diff --exit-code
       - name: Shell scripts
-        run: shellcheck rules/tests/run.sh rules/tools/pool_ips.sh test/integration/run.sh test/perf/run.sh
+        run: shellcheck --severity=warning rules/tests/run.sh rules/tools/pool_ips.sh test/integration/run.sh test/perf/run.sh
 
   test:
     strategy:

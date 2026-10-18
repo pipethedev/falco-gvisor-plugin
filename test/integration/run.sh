@@ -13,6 +13,8 @@
 #                fire with container metadata; benign workloads stay quiet
 #   fail-open    with Falco stopped, gVisor containers still start
 #   re-attach    a sandbox started before a Falco restart is monitored again
+#   reload       a rules change (Falco reopens the plugin) does not leave
+#                running sandboxes unmonitored
 #   restart      restarting Falco under load causes no workload errors and
 #                drops are reported
 set -euo pipefail
@@ -168,6 +170,23 @@ scenario_reattach() {
   docker rm -f "${PREFIX}-longrun" >/dev/null
 }
 
+scenario_reload() {
+  log "reload"
+  docker run -d --runtime="${RUNTIME}" --name "${PREFIX}-reload" alpine:3.20 sleep 600 >/dev/null
+  sleep 2
+  local before
+  before=$(docker logs "${FALCO}" 2>&1 | grep -c "listening on /run/falco/gvisor.sock")
+  docker exec "${FALCO}" sh -c 'echo "# reload probe" >> /etc/falco/rules.d/gvisor_rules.yaml'
+  for _ in $(seq "${STARTUP_TIMEOUT}"); do
+    [ "$(docker logs "${FALCO}" 2>&1 | grep -c "listening on /run/falco/gvisor.sock")" -gt "${before}" ] && break
+    sleep 1
+  done
+  sleep "${ATTACH_INTERVAL}"
+  docker exec "${PREFIX}-reload" sh -c 'cp /bin/busybox /tmp/xmrig && /tmp/xmrig --donate-level 1 true' || true
+  expect_alert "alert from running sandbox after a rules reload" "gVisor Crypto Miner Executed" "${PREFIX}-reload"
+  docker rm -f "${PREFIX}-reload" >/dev/null
+}
+
 scenario_restart_under_load() {
   log "restart under load"
   docker run -d --runtime="${RUNTIME}" --name "${PREFIX}-load" alpine:3.20 \
@@ -195,6 +214,7 @@ start_falco
 scenario_detections
 scenario_fail_open
 scenario_reattach
+scenario_reload
 scenario_restart_under_load
 
 if [ "${FAILURES}" -gt 0 ]; then

@@ -83,6 +83,14 @@ New containers are monitored at creation. Existing ones are attached by the plug
 
 Enable the `gVisor Monitoring Dropping Events` rule (disabled by default) to turn drops into alerts.
 
+## Restarts and reloads
+
+gVisor sinks connect once, when a sandbox is created, and never reconnect. Whenever Falco closes the plugin, every sandbox connection is lost. That happens on a restart, on `SIGHUP`, and on any change to a watched config or rules file (`watch_config_files`, on by default). Coverage then depends on the attacher re-attaching each running sandbox with `runsc trace create`, immediately when `attachOnOpen` is set, otherwise within `attachIntervalSeconds`.
+
+- Points emitted between the reload and the re-attach are lost.
+- If runsc or its state root is unreachable from Falco, sandboxes stay unmonitored. The default-enabled rule **gVisor Sandboxes Not Monitored** fires on every `gvisor_stats` event while `gvisor.stats.attacher_failed` is true or `gvisor.stats.unmonitored_sandboxes` is above zero. Treat it as a monitoring outage.
+- Disabling both `attachOnOpen` and periodic sweeps (`attachIntervalSeconds: 0`) means a single rules edit leaves every running sandbox unmonitored until it is recreated.
+
 ## Tuning rules
 
 Override the allowlist macros in a file that loads after `gvisor_rules.yaml`. Files in `rules.d` load alphabetically, so name it for example `gvisor_rules_local.yaml`:

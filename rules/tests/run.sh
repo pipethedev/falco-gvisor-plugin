@@ -68,3 +68,39 @@ docker logs "${NAME}" > "${WORK}/falco.log" 2>&1
 
 cd "${ROOT}"
 go run ./tools/replay verify -log "${WORK}/falco.log" rules/tests/*.json
+
+# Health: with runsc unreachable, the attacher must report the sandboxes it
+# cannot monitor through the default-enabled health rule.
+docker rm -f "${NAME}" >/dev/null
+cat > "${WORK}/health.yaml" <<'EOF'
+plugins:
+  - name: gvisor
+    library_path: /plugin/libgvisor.so
+    init_config:
+      metadataProvider: none
+      runscPath: /nonexistent/runsc
+      attachOnOpen: true
+      attachIntervalSeconds: 0
+      statsIntervalSeconds: 1
+load_plugins: [gvisor]
+rules_files:
+  - /rules/gvisor_rules.yaml
+json_output: true
+stdout_output:
+  enabled: true
+EOF
+docker run -d --name "${NAME}" \
+  -v "${PLUGIN_DIR}:/plugin:ro" \
+  -v "${ROOT}/rules:/rules:ro" \
+  -e HOST_ROOT=/ \
+  -v "${WORK}/health.yaml:/etc/falco/falco.yaml:ro" \
+  "${FALCO_IMAGE}" falco -c /etc/falco/falco.yaml --disable-source=syscall >/dev/null
+for _ in $(seq "${STARTUP_TIMEOUT}"); do
+  if docker logs "${NAME}" 2>/dev/null | grep -q '"rule":"gVisor Sandboxes Not Monitored"'; then
+    echo "PASS health_attacher_unreachable"
+    exit 0
+  fi
+  sleep 1
+done
+echo "FAIL health_attacher_unreachable: no 'gVisor Sandboxes Not Monitored' alert" >&2
+exit 1

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -100,14 +101,18 @@ func (a *Attacher) Run(ctx context.Context, attachNow bool, interval time.Durati
 func (a *Attacher) Sweep(ctx context.Context) {
 	sandboxes, err := a.listSandboxes(ctx)
 	if err != nil {
+		a.stats.AttacherFailed.Store(true)
 		logger.Printf("attacher: %v", err)
 		return
 	}
+	a.stats.AttacherFailed.Store(false)
 	a.forgetGone(sandboxes)
 	connected := a.connectedSandboxes(sandboxes)
 
 	sem := make(chan struct{}, attachConcurrency)
 	var wg sync.WaitGroup
+	var unmonitored atomic.Int64
+	defer func() { a.stats.UnmonitoredSandboxes.Store(unmonitored.Load()) }()
 	for _, id := range sandboxes.order {
 		if connected[id] {
 			continue
@@ -120,7 +125,9 @@ func (a *Attacher) Sweep(ctx context.Context) {
 		}
 		wg.Go(func() {
 			defer func() { <-sem }()
-			a.attach(ctx, id)
+			if !a.attach(ctx, id) {
+				unmonitored.Add(1)
+			}
 		})
 	}
 	wg.Wait()
@@ -184,7 +191,7 @@ func (a *Attacher) forgetGone(sandboxes sandboxSet) {
 	}
 }
 
-func (a *Attacher) attach(ctx context.Context, sandboxID string) {
+func (a *Attacher) attach(ctx context.Context, sandboxID string) bool {
 	ctx, cancel := context.WithTimeout(ctx, a.attachTimeout)
 	defer cancel()
 	a.stats.AttachAttempts.Add(1)
@@ -196,9 +203,10 @@ func (a *Attacher) attach(ctx context.Context, sandboxID string) {
 	if _, err := a.runner.Run(ctx, onStart, a.runscPath, a.attachArgs(sandboxID)...); err != nil {
 		a.stats.AttachFailures.Add(1)
 		logger.Printf("attach sandbox %s: %v", shortID(sandboxID), err)
-		return
+		return false
 	}
 	logger.Printf("attached trace session to sandbox %s", shortID(sandboxID))
+	return true
 }
 
 func (a *Attacher) listArgs() []string {

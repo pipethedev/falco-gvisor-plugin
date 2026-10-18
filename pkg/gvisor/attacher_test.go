@@ -150,8 +150,15 @@ func TestAttacherFailuresAndTimeouts(t *testing.T) {
 	runner := &fakeRunner{list: runscListJSON, failFor: map[string]bool{"aaa": true}}
 	a, stats := newTestAttacher(runner, &fakeConns{})
 	a.Sweep(context.Background())
-	if stats.AttachFailures.Load() != 1 {
-		t.Errorf("failures = %d", stats.AttachFailures.Load())
+	if stats.AttachFailures.Load() != 1 || stats.UnmonitoredSandboxes.Load() != 1 {
+		t.Errorf("failures = %d unmonitored = %d", stats.AttachFailures.Load(), stats.UnmonitoredSandboxes.Load())
+	}
+	runner.mu.Lock()
+	runner.failFor = nil
+	runner.mu.Unlock()
+	a.Sweep(context.Background())
+	if stats.UnmonitoredSandboxes.Load() != 0 {
+		t.Errorf("unmonitored not cleared after a successful sweep: %d", stats.UnmonitoredSandboxes.Load())
 	}
 
 	blocking := &fakeRunner{list: runscListJSON, block: true}
@@ -173,6 +180,9 @@ func TestAttacherBadListOutput(t *testing.T) {
 	a.Sweep(context.Background())
 	if stats.AttachAttempts.Load() != 0 {
 		t.Error("attached despite unreadable list")
+	}
+	if !stats.AttacherFailed.Load() {
+		t.Error("list failure not reported as attacher_failed")
 	}
 }
 

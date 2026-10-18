@@ -465,8 +465,25 @@
   tags: [gvisor, container, mitre_credential_access, T1528]
 
 # ---------------------------------------------------------------------------
-# Plugin health (disabled by default)
+# Plugin health
 # ---------------------------------------------------------------------------
+
+- rule: gVisor Sandboxes Not Monitored
+  desc: >
+    The plugin could not list gVisor sandboxes, or failed to attach a trace session to running
+    ones, so some sandboxes are not monitored. gVisor sinks never reconnect, so this follows a
+    Falco restart or rules/config reload when runsc or its state root is not reachable.
+    Reported on every gvisor_stats event while it persists.
+  condition: >
+    evt.type = gvisor_stats
+    and (gvisor.stats.attacher_failed = true or gvisor.stats.unmonitored_sandboxes > 0)
+  output: >
+    gVisor sandboxes are not monitored (unmonitored=%gvisor.stats.unmonitored_sandboxes
+    attacher_failed=%gvisor.stats.attacher_failed connections=%gvisor.stats.connections
+    attach_failures=%gvisor.stats.attach_failures)
+  priority: WARNING
+  source: gvisor
+  tags: [gvisor, plugin_health]
 
 - rule: gVisor Monitoring Dropping Events
   desc: The gvisor plugin reported dropped trace points. Enable to surface monitoring gaps as alerts.

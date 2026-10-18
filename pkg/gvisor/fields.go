@@ -98,6 +98,8 @@ const (
 	fieldStatsAttachAttempts  = "gvisor.stats.attach_attempts"
 	fieldStatsAttachFailures  = "gvisor.stats.attach_failures"
 	fieldStatsQueueBytes      = "gvisor.stats.queue_bytes"
+	fieldStatsUnmonitored     = "gvisor.stats.unmonitored_sandboxes"
+	fieldStatsAttacherFailed  = "gvisor.stats.attacher_failed"
 )
 
 func field(name, typ, desc string) FieldDef {
@@ -183,6 +185,8 @@ var fieldDefs = []FieldDef{
 	field(fieldStatsAttachAttempts, typeUint64, "gvisor_stats: attach attempts."),
 	field(fieldStatsAttachFailures, typeUint64, "gvisor_stats: failed attach attempts."),
 	field(fieldStatsQueueBytes, typeUint64, "gvisor_stats: bytes of events waiting for Falco (bounded by maxQueueBytes)."),
+	field(fieldStatsUnmonitored, typeUint64, "gvisor_stats: running sandboxes the last attacher sweep found unconnected and failed to attach."),
+	field(fieldStatsAttacherFailed, typeBool, "gvisor_stats: true when the last attacher sweep could not list sandboxes (runsc or its state root unreachable)."),
 }
 
 // Fields returns the extractable field definitions.
