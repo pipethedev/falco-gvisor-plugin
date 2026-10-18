@@ -44,7 +44,7 @@ func fdViewOf(p Point) (fdView, bool) {
 			return fdView{}, false
 		}
 		v := socketView(sa)
-		v.sip, v.sport, v.rip, v.rport = sa.IP, sa.Port, sa.IP, sa.Port
+		v.sip, v.sport, v.rip, v.rport = normalizeIP(sa.IP), sa.Port, normalizeIP(sa.IP), sa.Port
 		return v, true
 	case *pb.Accept:
 		sa, ok := parseSockaddr(m.GetAddress())
@@ -52,7 +52,7 @@ func fdViewOf(p Point) (fdView, bool) {
 			return fdView{}, false
 		}
 		v := socketView(sa)
-		v.rip, v.rport = sa.IP, sa.Port
+		v.rip, v.rport = normalizeIP(sa.IP), sa.Port
 		return v, true
 	case *pb.Bind:
 		sa, ok := parseSockaddr(m.GetAddress())
@@ -60,13 +60,13 @@ func fdViewOf(p Point) (fdView, bool) {
 			return fdView{}, false
 		}
 		v := socketView(sa)
-		v.sip, v.sport = sa.IP, sa.Port
+		v.sip, v.sport = normalizeIP(sa.IP), sa.Port
 		return v, true
 	case *pb.Listen:
 		v := fdView{typ: socketFamilyType(uint32(m.GetSocketFamily())), l4proto: l4ProtoOf(m.GetSocketType())}
 		if sa, ok := parseSockaddr(m.GetAddress()); ok {
 			v.name, v.nameRaw = sa.Endpoint(), sa.Endpoint()
-			v.sip, v.sport = sa.IP, sa.Port
+			v.sip, v.sport = normalizeIP(sa.IP), sa.Port
 		}
 		return v, true
 	case *pb.Socket:
@@ -105,6 +105,9 @@ func resolvePath(pathname string, dirfd int64, dirPath, cwd string) string {
 }
 
 func normalizeIP(ip net.IP) net.IP {
+	if ip == nil {
+		return nil
+	}
 	if v4 := ip.To4(); v4 != nil {
 		return v4
 	}

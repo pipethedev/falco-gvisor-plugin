@@ -186,7 +186,7 @@ func extractArgRequest(e *Event, _ FieldRequest) (any, bool) {
 
 func fdString(get func(fdView) string) extractorFunc {
 	return func(e *Event, _ FieldRequest) (any, bool) {
-		v, ok := fdViewOf(e.Point)
+		v, ok := e.fd, e.fdOK
 		if !ok {
 			return nil, false
 		}
@@ -197,7 +197,7 @@ func fdString(get func(fdView) string) extractorFunc {
 
 func fdFile(part func(string) string) extractorFunc {
 	return func(e *Event, _ FieldRequest) (any, bool) {
-		v, ok := fdViewOf(e.Point)
+		v, ok := e.fd, e.fdOK
 		if !ok || !v.isFile || v.name == "" {
 			return nil, false
 		}
@@ -207,7 +207,7 @@ func fdFile(part func(string) string) extractorFunc {
 
 func fdIP(get func(fdView) (net.IP, uint16), wantPort bool) extractorFunc {
 	return func(e *Event, _ FieldRequest) (any, bool) {
-		v, ok := fdViewOf(e.Point)
+		v, ok := e.fd, e.fdOK
 		if !ok {
 			return nil, false
 		}
@@ -218,7 +218,7 @@ func fdIP(get func(fdView) (net.IP, uint16), wantPort bool) extractorFunc {
 		if wantPort {
 			return uint64(port), true
 		}
-		return normalizeIP(ip), true
+		return ip, true
 	}
 }
 
@@ -340,7 +340,7 @@ func Describe(evt *Event) string {
 	}
 	p := evt.Context.Process
 	parts := []string{evt.Point.PointName(), "pid=" + uintString(uint64(p.Pid)), "proc=" + p.Comm}
-	if v, ok := fdViewOf(evt.Point); ok && v.name != "" {
+	if v, ok := evt.fd, evt.fdOK; ok && v.name != "" {
 		parts = append(parts, "fd="+v.name)
 	}
 	if id := eventContainerID(evt); id != "" {

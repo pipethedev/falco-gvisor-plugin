@@ -33,6 +33,9 @@ type Event struct {
 	Context EventContext
 	Point   Point
 	Stats   *StatsSnapshot
+
+	fd   fdView
+	fdOK bool
 }
 
 // EncodeStats builds the payload of a gvisor_stats event.
@@ -86,7 +89,8 @@ func DecodeEvent(data []byte) (Event, error) {
 	if ctx.Arch != "" {
 		point.Arch = ctx.Arch
 	}
-	return Event{Context: ctx, Point: point}, nil
+	fd, fdOK := fdViewOf(point)
+	return Event{Context: ctx, Point: point, fd: fd, fdOK: fdOK}, nil
 }
 
 func encodeContext(ctx EventContext) ([]byte, error) {

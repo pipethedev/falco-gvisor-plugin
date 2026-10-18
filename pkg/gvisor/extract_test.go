@@ -3,6 +3,7 @@ package gvisor
 import (
 	"net"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"google.golang.org/protobuf/proto"
@@ -96,6 +97,19 @@ func TestExtractConnect(t *testing.T) {
 		if v := get(t, evt, absent); v != nil {
 			t.Errorf("%s should be absent, got %v", absent, v)
 		}
+	}
+}
+
+func TestExtractIPOwnedByEvent(t *testing.T) {
+	evt := eventFor(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{
+		ContextData: testContext(42, 1, "curl"), Exit: &pb.Exit{}, Address: sockaddrIPv4(net.IPv4(169, 254, 169, 254), 80),
+	})
+	first := get(t, evt, fieldFDRIP).(net.IP)
+	runtime.GC()
+	second := get(t, evt, fieldFDRIP).(net.IP)
+	sip := get(t, evt, fieldFDSIP).(net.IP)
+	if &first[0] != &second[0] || &first[0] != &evt.fd.rip[0] || !sip.Equal(first) {
+		t.Fatal("ipaddr values must point into memory owned by the cached event, not fresh per-call allocations: the SDK hands the slice's address to Falco without copying it")
 	}
 }
 
