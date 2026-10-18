@@ -245,6 +245,24 @@ func TestMetadataCacheProviderDown(t *testing.T) {
 	}
 }
 
+func TestMetadataCacheBounded(t *testing.T) {
+	stub := &stubFetcher{info: &ContainerInfo{Name: "x"}}
+	cache := NewMetadataCache(stub, time.Minute, nil)
+	t.Cleanup(func() { _ = cache.Close() })
+	cache.maxItems = 3
+	for i := range 10 {
+		id := strings.Repeat(string(rune('a'+i)), 64)
+		cache.Lookup(id)
+		waitFor(t, "fetch "+id[:1], func() bool { return cache.Lookup(id) != nil })
+	}
+	cache.mu.Lock()
+	n := len(cache.entries)
+	cache.mu.Unlock()
+	if n > cache.maxItems {
+		t.Errorf("cache holds %d entries, cap %d", n, cache.maxItems)
+	}
+}
+
 func TestMetadataCacheDisabled(t *testing.T) {
 	cache := NewMetadataCache(nil, time.Minute, nil)
 	if cache.Lookup(testContainerID) != nil {

@@ -11,6 +11,7 @@ const (
 	metadataFetchTimeout = 2 * time.Second
 	metadataNegativeTTL  = 30 * time.Second
 	metadataConcurrency  = 4
+	metadataMaxEntries   = 8192
 )
 
 // MetadataFetcher retrieves container metadata from a container runtime.
@@ -31,6 +32,7 @@ type MetadataCache struct {
 	ttl       time.Duration
 	allowlist map[string]struct{}
 	now       func() time.Time
+	maxItems  int
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -55,6 +57,7 @@ func NewMetadataCache(fetcher MetadataFetcher, ttl time.Duration, allowlist []st
 		ttl:       ttl,
 		allowlist: allowed,
 		now:       time.Now,
+		maxItems:  metadataMaxEntries,
 		ctx:       ctx,
 		cancel:    cancel,
 		sem:       make(chan struct{}, metadataConcurrency),
@@ -132,9 +135,33 @@ func (m *MetadataCache) fetch(containerID string) {
 		logger.Printf("container metadata for %s: %v", shortID(containerID), err)
 		previous := m.entries[containerID].info
 		m.entries[containerID] = metadataEntry{info: previous, expires: m.now().Add(metadataNegativeTTL)}
+		m.pruneLocked()
 		return
 	}
 	m.entries[containerID] = metadataEntry{info: m.filter(info), expires: m.now().Add(m.ttl)}
+	m.pruneLocked()
+}
+
+func (m *MetadataCache) pruneLocked() {
+	if len(m.entries) <= m.maxItems {
+		return
+	}
+	now := m.now()
+	for id, entry := range m.entries {
+		if now.After(entry.expires) {
+			delete(m.entries, id)
+		}
+	}
+	for len(m.entries) > m.maxItems {
+		var oldestID string
+		var oldest time.Time
+		for id, entry := range m.entries {
+			if oldestID == "" || entry.expires.Before(oldest) {
+				oldestID, oldest = id, entry.expires
+			}
+		}
+		delete(m.entries, oldestID)
+	}
 }
 
 func (m *MetadataCache) filter(info *ContainerInfo) *ContainerInfo {
