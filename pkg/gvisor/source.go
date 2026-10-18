@@ -10,7 +10,7 @@ import (
 // Source runs everything behind an open event source: the socket server,
 // the attacher, the metadata cache and the stats reporter.
 type Source struct {
-	emit     EmitFunc
+	queue    *eventQueue
 	stats    *Stats
 	server   *Server
 	metadata *MetadataCache
@@ -20,18 +20,19 @@ type Source struct {
 }
 
 // StartSource starts listening and attaching. Events, including periodic
-// gvisor_stats events, are handed to emit.
-func StartSource(cfg Config, emit EmitFunc, runner Runner) (*Source, error) {
+// gvisor_stats events, are buffered in a byte-bounded queue read with Next.
+func StartSource(cfg Config, runner Runner) (*Source, error) {
 	fetcher, err := NewMetadataFetcher(cfg)
 	if err != nil {
 		return nil, err
 	}
+	stats := &Stats{}
 	src := &Source{
-		emit:     emit,
-		stats:    &Stats{},
+		queue:    newEventQueue(cfg.MaxQueueBytes, stats),
+		stats:    stats,
 		metadata: NewMetadataCache(fetcher, cfg.metadataCacheTTL(), cfg.LabelAllowlist),
 	}
-	src.server = NewServer(cfg, emit, src.metadata, src.stats)
+	src.server = NewServer(cfg, src.queue.push, src.metadata, src.stats)
 	if err := src.server.Start(); err != nil {
 		return nil, errors.Join(err, src.metadata.Close())
 	}
@@ -51,13 +52,20 @@ func NewExecRunner() Runner {
 	return execRunner{}
 }
 
+// Next returns the oldest queued event, waiting up to wait. It returns
+// ErrNoEvent on timeout and ErrSourceClosed once the source is closed and
+// drained.
+func (s *Source) Next(ctx context.Context, wait time.Duration) (QueuedEvent, error) {
+	return s.queue.pop(ctx, wait)
+}
+
 // Stats exposes the source counters.
 func (s *Source) Stats() *Stats {
 	return s.stats
 }
 
-// Close stops all goroutines and releases the socket. It is idempotent and
-// emit is never called after it returns.
+// Close stops all goroutines, releases the socket and closes the queue. It
+// is idempotent.
 func (s *Source) Close() {
 	s.once.Do(func() {
 		s.cancel()
@@ -68,6 +76,7 @@ func (s *Source) Close() {
 		if err := s.metadata.Close(); err != nil {
 			logger.Printf("close metadata: %v", err)
 		}
+		s.queue.close()
 	})
 }
 
@@ -88,15 +97,15 @@ func (s *Source) reportStats(ctx context.Context, interval time.Duration) {
 }
 
 func (s *Source) publishStats(snap StatsSnapshot, now time.Time) {
-	logger.Printf("stats: connections=%d events/s=%.1f drops=%d (channel_full=%d truncated=%d decode=%d unsupported=%d oversize=%d sandbox=%d) attach_failures=%d/%d",
-		snap.Connections, snap.EventsPerSecond, snap.TotalDrops(), snap.DropChannelFull, snap.DropTruncated,
+	logger.Printf("stats: connections=%d events/s=%.1f queue_bytes=%d drops=%d (queue_full=%d truncated=%d decode=%d unsupported=%d oversize=%d sandbox=%d) attach_failures=%d/%d",
+		snap.Connections, snap.EventsPerSecond, snap.QueueBytes, snap.TotalDrops(), snap.DropChannelFull, snap.DropTruncated,
 		snap.DropDecodeError, snap.DropUnsupported, snap.DropContextSize, snap.DropSandbox, snap.AttachFailures, snap.AttachAttempts)
 	data, err := EncodeStats(snap)
 	if err != nil {
 		logger.Printf("stats event: %v", err)
 		return
 	}
-	if !s.emit(data, now) {
+	if !s.queue.push(data, now) {
 		s.stats.DropChannelFull.Add(1)
 	}
 }

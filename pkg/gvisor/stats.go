@@ -19,6 +19,7 @@ type Stats struct {
 	HandshakeRejected atomic.Uint64
 	AttachAttempts    atomic.Uint64
 	AttachFailures    atomic.Uint64
+	QueueBytes        atomic.Int64
 }
 
 // StatsSnapshot is a point-in-time copy of Stats with derived rates.
@@ -36,6 +37,7 @@ type StatsSnapshot struct {
 	HandshakeRejected uint64  `json:"handshake_rejected"`
 	AttachAttempts    uint64  `json:"attach_attempts"`
 	AttachFailures    uint64  `json:"attach_failures"`
+	QueueBytes        int64   `json:"queue_bytes"`
 	TimeNs            int64   `json:"time_ns"`
 }
 
@@ -54,6 +56,7 @@ func (s *Stats) Snapshot(prev StatsSnapshot, now time.Time) StatsSnapshot {
 		HandshakeRejected: s.HandshakeRejected.Load(),
 		AttachAttempts:    s.AttachAttempts.Load(),
 		AttachFailures:    s.AttachFailures.Load(),
+		QueueBytes:        s.QueueBytes.Load(),
 		TimeNs:            now.UnixNano(),
 	}
 	if prev.TimeNs > 0 && snap.TimeNs > prev.TimeNs {

@@ -54,5 +54,5 @@ Host: — (CPU, kernel, gVisor version, platform `systrap`/`kvm`, Falco version)
 
 - **The openat profile** emits one point per file open. Request-serving workloads that open files per request (static file servers, interpreters loading modules) will see the largest difference. Measure before enabling it fleet-wide.
 - **The sink write path** never blocks the workload. With `retries: 3`, `backoff: 50us` and `backoff_max: 1ms`, a burst that fills the socket buffer costs at most about 0.35 ms of backoff per point (50 + 100 + 200 µs) before the point is dropped (`drops_sandbox`).
-- **Plugin side:** decoding and enrichment run on one goroutine per sandbox. The queue to Falco holds 8192 events and drops (`drops_channel_full`) instead of blocking.
+- **Plugin side:** decoding and enrichment run on one goroutine per sandbox. Events wait for Falco in a queue bounded by `maxQueueBytes` (64 MiB by default) and are dropped (`drops_channel_full`) instead of blocking; `gvisor.stats.queue_bytes` shows its depth. Size Falco's memory limit with this budget in mind.
 - **Metadata** lookups are cached per container (`metadataCacheTTLSeconds`) and never block event processing.

@@ -113,4 +113,5 @@ Differences from Falco's syscall source:
 | `gvisor.stats.drops_sandbox` | uint64 | gvisor_stats: points the sandbox reported dropping on its side. |
 | `gvisor.stats.attach_attempts` | uint64 | gvisor_stats: attach attempts. |
 | `gvisor.stats.attach_failures` | uint64 | gvisor_stats: failed attach attempts. |
+| `gvisor.stats.queue_bytes` | uint64 | gvisor_stats: bytes of events waiting for Falco (bounded by maxQueueBytes). |
 

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -20,7 +22,7 @@ const (
 	pluginContact      = "github.com/falcosecurity/plugins"
 	pluginDescription  = "Runtime threat detection for gVisor-sandboxed containers via gVisor Runtime Monitoring"
 	requiredAPIVersion = "3.11.0"
-	eventChannelSize   = 8192
+	pullWait           = 10 * time.Millisecond
 )
 
 // gvisorPlugin implements the Falco source and extractor capabilities.
@@ -114,30 +116,31 @@ func (p *gvisorPlugin) decode(evt sdk.EventReader) (*gvisor.Event, error) {
 }
 
 func (p *gvisorPlugin) Open(string) (source.Instance, error) {
-	events := make(chan source.PushEvent, eventChannelSize)
-	emit := func(data []byte, ts time.Time) bool {
-		select {
-		case events <- source.PushEvent{Data: data, Timestamp: ts}:
-			return true
-		default:
-			return false
-		}
-	}
-	src, err := gvisor.StartSource(p.config, emit, gvisor.NewExecRunner())
+	src, err := gvisor.StartSource(p.config, gvisor.NewExecRunner())
 	if err != nil {
 		return nil, err
 	}
-	closeSource := func() {
-		src.Close()
-		close(events)
+	pull := func(ctx context.Context, evt sdk.EventWriter) error {
+		queued, err := src.Next(ctx, pullWait)
+		switch {
+		case errors.Is(err, gvisor.ErrNoEvent):
+			return sdk.ErrTimeout
+		case err != nil:
+			return sdk.ErrEOF
+		}
+		if _, err := evt.Writer().Write(queued.Data); err != nil {
+			return fmt.Errorf("write event: %w", err)
+		}
+		evt.SetTimestamp(uint64(queued.Time.UnixNano()))
+		return nil
 	}
-	instance, err := source.NewPushInstance(
-		events,
-		source.WithInstanceClose(closeSource),
+	instance, err := source.NewPullInstance(
+		pull,
+		source.WithInstanceClose(src.Close),
 		source.WithInstanceEventSize(gvisor.MaxPluginEventSize(p.config)),
 	)
 	if err != nil {
-		closeSource()
+		src.Close()
 		return nil, err
 	}
 	return instance, nil

@@ -37,7 +37,7 @@ gVisor runs containers on a user-space kernel, so host-kernel sensors (Falco's `
 
 - Every shipped session config sets `"ignore_setup_error": true`, so a sandbox starts even when Falco is down.
 - The gVisor remote sink writes without blocking and drops points instead of stalling the workload.
-- The plugin never blocks on Falco: when its queue is full, events are dropped and counted (`gvisor_stats`).
+- The plugin never blocks on Falco: events wait in a queue bounded by `maxQueueBytes`, and when it is full they are dropped and counted (`gvisor_stats`), so a burst from a sandbox cannot exhaust Falco's memory.
 
 ## Quick start (Docker host)
 
@@ -93,6 +93,7 @@ Add the plugin with [`deploy/falco.config.d/gvisor.yaml`](deploy/falco.config.d/
 | `metadataCacheTTLSeconds` | `600` | Metadata cache lifetime |
 | `maxTrackedProcesses` | `4096` | Per-sandbox process table cap |
 | `statsIntervalSeconds` | `60` | Emit a `gvisor_stats` event and log counters; `0` disables |
+| `maxQueueBytes` | `67108864` (64 MiB) | Byte budget for events waiting for Falco; beyond it events are dropped and counted (`drops_channel_full`) |
 
 ### Trace sessions
 

@@ -35,14 +35,16 @@ func TestParseConfigOverrides(t *testing.T) {
 
 func TestParseConfigRejects(t *testing.T) {
 	cases := map[string]string{
-		"unknown key":       `{"bogus":1}`,
-		"relative socket":   `{"socketPath":"gvisor.sock"}`,
-		"tiny event size":   `{"maxEventSize":10}`,
-		"zero processes":    `{"maxTrackedProcesses":0}`,
-		"negative interval": `{"attachIntervalSeconds":-1}`,
-		"bad provider":      `{"metadataProvider":"podman"}`,
-		"empty runsc":       `{"runscPath":""}`,
-		"not json":          `{`,
+		"unknown key":        `{"bogus":1}`,
+		"relative socket":    `{"socketPath":"gvisor.sock"}`,
+		"tiny event size":    `{"maxEventSize":10}`,
+		"zero processes":     `{"maxTrackedProcesses":0}`,
+		"negative interval":  `{"attachIntervalSeconds":-1}`,
+		"bad provider":       `{"metadataProvider":"podman"}`,
+		"tiny queue":         `{"maxQueueBytes":1024}`,
+		"queue below events": `{"maxEventSize":4194304,"maxQueueBytes":4194304}`,
+		"empty runsc":        `{"runscPath":""}`,
+		"not json":           `{`,
 	}
 	for name, raw := range cases {
 		t.Run(name, func(t *testing.T) {

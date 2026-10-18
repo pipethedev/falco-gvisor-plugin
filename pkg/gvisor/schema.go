@@ -18,7 +18,8 @@ const initSchema = `{
     "labelAllowlist": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Labels to fetch and expose; empty means all"},
     "metadataCacheTTLSeconds": {"type": "integer", "minimum": 0, "default": 600, "description": "Container metadata cache lifetime"},
     "maxTrackedProcesses": {"type": "integer", "minimum": 1, "maximum": 1048576, "default": 4096, "description": "Per-sandbox process table cap"},
-    "statsIntervalSeconds": {"type": "integer", "minimum": 0, "default": 60, "description": "Interval for gvisor_stats events; 0 disables"}
+    "statsIntervalSeconds": {"type": "integer", "minimum": 0, "default": 60, "description": "Interval for gvisor_stats events; 0 disables"},
+    "maxQueueBytes": {"type": "integer", "minimum": 1048576, "maximum": 4294967296, "default": 67108864, "description": "Byte budget for events waiting for Falco; events beyond it are dropped and counted"}
   }
 }`
 

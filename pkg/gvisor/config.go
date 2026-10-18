@@ -21,6 +21,9 @@ const (
 	defaultMetadataCacheTTL   = 600
 	defaultMaxTrackedProcess  = 4096
 	defaultStatsInterval      = 60
+	defaultMaxQueueBytes      = 64 << 20
+	minMaxQueueBytes          = 1 << 20
+	maxMaxQueueBytes          = 4 << 30
 	minMaxEventSize           = 1024
 	maxMaxEventSize           = 4 << 20
 	maxMaxTrackedProcesses    = 1 << 20
@@ -47,6 +50,7 @@ type Config struct {
 	MetadataCacheTTLSeconds int      `json:"metadataCacheTTLSeconds"`
 	MaxTrackedProcesses     int      `json:"maxTrackedProcesses"`
 	StatsIntervalSeconds    int      `json:"statsIntervalSeconds"`
+	MaxQueueBytes           int      `json:"maxQueueBytes"`
 }
 
 // DefaultConfig returns the configuration used for keys absent from the init config.
@@ -66,6 +70,7 @@ func DefaultConfig() Config {
 		MetadataCacheTTLSeconds: defaultMetadataCacheTTL,
 		MaxTrackedProcesses:     defaultMaxTrackedProcess,
 		StatsIntervalSeconds:    defaultStatsInterval,
+		MaxQueueBytes:           defaultMaxQueueBytes,
 	}
 }
 
@@ -103,6 +108,9 @@ func (c Config) validate() error {
 	}
 	if c.MaxEventSize < minMaxEventSize || c.MaxEventSize > maxMaxEventSize {
 		errs = append(errs, fmt.Errorf("%s: maxEventSize must be in [%d, %d]", errInvalidConfigPrefix, minMaxEventSize, maxMaxEventSize))
+	}
+	if c.MaxQueueBytes < minMaxQueueBytes || c.MaxQueueBytes > maxMaxQueueBytes || c.MaxQueueBytes < 2*c.MaxEventSize {
+		errs = append(errs, fmt.Errorf("%s: maxQueueBytes must be in [%d, %d] and at least twice maxEventSize", errInvalidConfigPrefix, minMaxQueueBytes, maxMaxQueueBytes))
 	}
 	if c.MaxTrackedProcesses < 1 || c.MaxTrackedProcesses > maxMaxTrackedProcesses {
 		errs = append(errs, fmt.Errorf("%s: maxTrackedProcesses must be in [1, %d]", errInvalidConfigPrefix, maxMaxTrackedProcesses))

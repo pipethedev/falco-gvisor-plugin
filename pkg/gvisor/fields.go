@@ -97,6 +97,7 @@ const (
 	fieldStatsDropSandbox     = "gvisor.stats.drops_sandbox"
 	fieldStatsAttachAttempts  = "gvisor.stats.attach_attempts"
 	fieldStatsAttachFailures  = "gvisor.stats.attach_failures"
+	fieldStatsQueueBytes      = "gvisor.stats.queue_bytes"
 )
 
 func field(name, typ, desc string) FieldDef {
@@ -181,6 +182,7 @@ var fieldDefs = []FieldDef{
 	field(fieldStatsDropSandbox, typeUint64, "gvisor_stats: points the sandbox reported dropping on its side."),
 	field(fieldStatsAttachAttempts, typeUint64, "gvisor_stats: attach attempts."),
 	field(fieldStatsAttachFailures, typeUint64, "gvisor_stats: failed attach attempts."),
+	field(fieldStatsQueueBytes, typeUint64, "gvisor_stats: bytes of events waiting for Falco (bounded by maxQueueBytes)."),
 }
 
 // Fields returns the extractable field definitions.

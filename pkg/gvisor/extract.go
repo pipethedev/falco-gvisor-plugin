@@ -92,6 +92,7 @@ var statsExtractors = map[string]func(StatsSnapshot) any{
 	fieldStatsDropSandbox:     func(s StatsSnapshot) any { return s.DropSandbox },
 	fieldStatsAttachAttempts:  func(s StatsSnapshot) any { return s.AttachAttempts },
 	fieldStatsAttachFailures:  func(s StatsSnapshot) any { return s.AttachFailures },
+	fieldStatsQueueBytes:      func(s StatsSnapshot) any { return uint64(max(s.QueueBytes, 0)) },
 }
 
 // ExtractField returns the value of a field for an event and whether the
