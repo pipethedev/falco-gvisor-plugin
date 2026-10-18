@@ -21,3 +21,8 @@ const initSchema = `{
     "statsIntervalSeconds": {"type": "integer", "minimum": 0, "default": 60, "description": "Interval for gvisor_stats events; 0 disables"}
   }
 }`
+
+// InitSchema returns the JSON schema of the init config.
+func InitSchema() string {
+	return initSchema
+}

@@ -9,6 +9,7 @@ import (
 
 const (
 	envelopeMagic   = "GVP1"
+	statsMagic      = "GVS1"
 	envelopeLenSize = 4
 	envelopeHdrSize = len(envelopeMagic) + envelopeLenSize
 	maxContextBytes = 32 << 10
@@ -25,10 +26,21 @@ type EventContext struct {
 	Container *ContainerInfo `json:"ctr,omitempty"`
 }
 
-// Event is a decoded plugin event: enrichment plus the original point.
+// Event is a decoded plugin event: either enrichment plus the original
+// point, or a stats event when Stats is set.
 type Event struct {
 	Context EventContext
 	Point   Point
+	Stats   *StatsSnapshot
+}
+
+// EncodeStats builds the payload of a gvisor_stats event.
+func EncodeStats(snap StatsSnapshot) ([]byte, error) {
+	encoded, err := json.Marshal(snap)
+	if err != nil {
+		return nil, fmt.Errorf("encode stats: %w", err)
+	}
+	return append([]byte(statsMagic), encoded...), nil
 }
 
 // EncodeEvent builds the opaque plugin event payload
@@ -45,8 +57,15 @@ func EncodeEvent(ctx EventContext, packet []byte) ([]byte, error) {
 	return append(out, packet...), nil
 }
 
-// DecodeEvent parses a payload produced by EncodeEvent.
+// DecodeEvent parses a payload produced by EncodeEvent or EncodeStats.
 func DecodeEvent(data []byte) (Event, error) {
+	if len(data) >= len(statsMagic) && string(data[:len(statsMagic)]) == statsMagic {
+		var snap StatsSnapshot
+		if err := json.Unmarshal(data[len(statsMagic):], &snap); err != nil {
+			return Event{}, fmt.Errorf("decode stats: %w", err)
+		}
+		return Event{Stats: &snap}, nil
+	}
 	if len(data) < envelopeHdrSize || string(data[:len(envelopeMagic)]) != envelopeMagic {
 		return Event{}, errNotEnvelope
 	}
