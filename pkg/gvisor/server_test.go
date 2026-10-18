@@ -140,9 +140,7 @@ func TestServerEnrichesEvents(t *testing.T) {
 	if evt.Context.Container == nil || evt.Context.Container.Name != "web" {
 		t.Errorf("container metadata missing: %+v", evt.Context.Container)
 	}
-	if got := stats.Events.Load(); got != 2 {
-		t.Errorf("events = %d", got)
-	}
+	waitFor(t, "event counter", func() bool { return stats.Events.Load() == 2 })
 	waitFor(t, "connection info", func() bool {
 		conns := srv.Connections()
 		return len(conns) == 1 && len(conns[0].ContainerIDs) == 1 && conns[0].ContainerIDs[0] == testContainerID
