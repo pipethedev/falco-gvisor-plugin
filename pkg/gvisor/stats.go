@@ -17,6 +17,7 @@ type Stats struct {
 	DropContextSize      atomic.Uint64
 	DropSandbox          atomic.Uint64
 	HandshakeRejected    atomic.Uint64
+	PeerRejected         atomic.Uint64
 	AttachAttempts       atomic.Uint64
 	AttachFailures       atomic.Uint64
 	QueueBytes           atomic.Int64
@@ -37,6 +38,7 @@ type StatsSnapshot struct {
 	DropContextSize      uint64  `json:"drops_context_size"`
 	DropSandbox          uint64  `json:"drops_sandbox"`
 	HandshakeRejected    uint64  `json:"handshake_rejected"`
+	PeerRejected         uint64  `json:"peer_rejected"`
 	AttachAttempts       uint64  `json:"attach_attempts"`
 	AttachFailures       uint64  `json:"attach_failures"`
 	QueueBytes           int64   `json:"queue_bytes"`
@@ -58,6 +60,7 @@ func (s *Stats) Snapshot(prev StatsSnapshot, now time.Time) StatsSnapshot {
 		DropContextSize:      s.DropContextSize.Load(),
 		DropSandbox:          s.DropSandbox.Load(),
 		HandshakeRejected:    s.HandshakeRejected.Load(),
+		PeerRejected:         s.PeerRejected.Load(),
 		AttachAttempts:       s.AttachAttempts.Load(),
 		AttachFailures:       s.AttachFailures.Load(),
 		QueueBytes:           s.QueueBytes.Load(),

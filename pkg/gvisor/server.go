@@ -93,6 +93,9 @@ func (s *Server) Start() error {
 	if err := os.MkdirAll(filepath.Dir(s.socketPath), socketDirPerm); err != nil {
 		return fmt.Errorf("create socket directory: %w", err)
 	}
+	if err := checkSocketDir(filepath.Dir(s.socketPath), os.Geteuid()); err != nil {
+		return err
+	}
 	if err := removeStaleSocket(s.socketPath); err != nil {
 		return err
 	}
@@ -156,7 +159,14 @@ func (s *Server) acceptLoop() {
 			time.Sleep(acceptRetryDelay)
 			continue
 		}
-		sc := &sandboxConn{conn: conn, peerPID: peerPID(conn), containerIDs: map[string]struct{}{}}
+		pid, uid, credOK := peerCred(conn)
+		if credOK && !allowedPeer(uid, os.Geteuid()) {
+			s.stats.PeerRejected.Add(1)
+			logger.Printf("rejected connection from pid %d: %v (uid %d)", pid, errUntrustedPeer, uid)
+			_ = conn.Close()
+			continue
+		}
+		sc := &sandboxConn{conn: conn, peerPID: pid, containerIDs: map[string]struct{}{}}
 		if !s.track(sc) {
 			_ = conn.Close()
 			return

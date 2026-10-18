@@ -115,5 +115,6 @@ Differences from Falco's syscall source:
 | `gvisor.stats.attach_failures` | uint64 | gvisor_stats: failed attach attempts. |
 | `gvisor.stats.queue_bytes` | uint64 | gvisor_stats: bytes of events waiting for Falco (bounded by maxQueueBytes). |
 | `gvisor.stats.unmonitored_sandboxes` | uint64 | gvisor_stats: running sandboxes the last attacher sweep found unconnected and failed to attach. |
+| `gvisor.stats.peer_rejected` | uint64 | gvisor_stats: connections refused because the peer was neither root nor Falco's user. |
 | `gvisor.stats.attacher_failed` | bool | gvisor_stats: true when the last attacher sweep could not list sandboxes (runsc or its state root unreachable). |
 

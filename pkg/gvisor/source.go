@@ -97,9 +97,9 @@ func (s *Source) reportStats(ctx context.Context, interval time.Duration) {
 }
 
 func (s *Source) publishStats(snap StatsSnapshot, now time.Time) {
-	logger.Printf("stats: connections=%d events/s=%.1f queue_bytes=%d drops=%d (queue_full=%d truncated=%d decode=%d unsupported=%d oversize=%d sandbox=%d) attach_failures=%d/%d unmonitored=%d attacher_failed=%t",
+	logger.Printf("stats: connections=%d events/s=%.1f queue_bytes=%d drops=%d (queue_full=%d truncated=%d decode=%d unsupported=%d oversize=%d sandbox=%d) attach_failures=%d/%d unmonitored=%d attacher_failed=%t peer_rejected=%d",
 		snap.Connections, snap.EventsPerSecond, snap.QueueBytes, snap.TotalDrops(), snap.DropChannelFull, snap.DropTruncated,
-		snap.DropDecodeError, snap.DropUnsupported, snap.DropContextSize, snap.DropSandbox, snap.AttachFailures, snap.AttachAttempts, snap.UnmonitoredSandboxes, snap.AttacherFailed)
+		snap.DropDecodeError, snap.DropUnsupported, snap.DropContextSize, snap.DropSandbox, snap.AttachFailures, snap.AttachAttempts, snap.UnmonitoredSandboxes, snap.AttacherFailed, snap.PeerRejected)
 	data, err := EncodeStats(snap)
 	if err != nil {
 		logger.Printf("stats event: %v", err)
