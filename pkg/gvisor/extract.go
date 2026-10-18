@@ -50,6 +50,7 @@ var pointExtractors = map[string]extractorFunc{
 	fieldProcCwd:        procString(func(p ProcessInfo) string { return p.Cwd }),
 	fieldProcTTY:        proc(func(p ProcessInfo) any { return uint64(p.TTY) }),
 	fieldProcUpperLayer: proc(func(p ProcessInfo) any { return p.UpperLayer }),
+	fieldProcLowerLayer: proc(func(p ProcessInfo) any { return p.LowerLayer }),
 	fieldProcFromMemfd:  proc(func(p ProcessInfo) any { return p.FromMemfd }),
 	fieldProcStdinType:  procString(func(p ProcessInfo) string { return p.StdinType }),
 	fieldProcStdoutType: procString(func(p ProcessInfo) string { return p.StdoutType }),

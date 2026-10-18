@@ -110,6 +110,7 @@ type Event struct {
 	Exe           string   `json:"exe"`
 	Argv          []string `json:"argv"`
 	UpperLayer    bool     `json:"upper_layer"`
+	LowerLayer    bool     `json:"lower_layer"`
 	Memfd         bool     `json:"memfd"`
 	Stdin         string   `json:"stdin"`
 	Stdout        string   `json:"stdout"`
@@ -232,6 +233,7 @@ func (e Event) exec(ctx *pb.ContextData) *pb.ExecveInfo {
 		BinaryPath:           e.Exe,
 		Argv:                 e.Argv,
 		BinaryOverlayfsUpper: e.UpperLayer,
+		BinaryOverlayfsLower: e.LowerLayer,
 		BinaryInMemfd:        e.Memfd,
 		Stdin:                fdInfo(e.Stdin),
 		Stdout:               fdInfo(e.Stdout),

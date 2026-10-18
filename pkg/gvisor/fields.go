@@ -64,6 +64,7 @@ const (
 	fieldProcAName       = "proc.aname"
 	fieldProcAExePath    = "proc.aexepath"
 	fieldProcUpperLayer  = "proc.is_exe_upper_layer"
+	fieldProcLowerLayer  = "proc.is_exe_lower_layer"
 	fieldProcFromMemfd   = "proc.is_exe_from_memfd"
 	fieldProcStdinType   = "proc.stdin.type"
 	fieldProcStdoutType  = "proc.stdout.type"
@@ -151,6 +152,7 @@ var fieldDefs = []FieldDef{
 	fieldWithArg(fieldProcAName, "Name of the Nth ancestor: [0] is the process, [1] its parent, up to [8].", ArgIndex),
 	fieldWithArg(fieldProcAExePath, "Executable path of the Nth ancestor.", ArgIndex),
 	field(fieldProcUpperLayer, typeBool, "True when the executable was written to the container's upper (writable) layer."),
+	field(fieldProcLowerLayer, typeBool, "True when the executable exists on the container image (overlay lower) layer. False for files created at runtime, including on tmpfs mounts such as /dev/shm and the /tmp tmpfs runsc mounts over an empty image /tmp."),
 	field(fieldProcFromMemfd, typeBool, "True when the executable is a memfd (fileless execution)."),
 	field(fieldProcStdinType, typeString, "fd type of stdin at exec: file, directory, pipe, unix, ipv4, ipv6."),
 	field(fieldProcStdoutType, typeString, "fd type of stdout at exec."),

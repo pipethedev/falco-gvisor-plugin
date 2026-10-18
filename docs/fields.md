@@ -67,6 +67,7 @@ Differences from Falco's syscall source:
 | `proc.aname[N]` | string | Name of the Nth ancestor: [0] is the process, [1] its parent, up to [8]. |
 | `proc.aexepath[N]` | string | Executable path of the Nth ancestor. |
 | `proc.is_exe_upper_layer` | bool | True when the executable was written to the container's upper (writable) layer. |
+| `proc.is_exe_lower_layer` | bool | True when the executable exists on the container image (overlay lower) layer. False for files created at runtime, including on tmpfs mounts such as /dev/shm and the /tmp tmpfs runsc mounts over an empty image /tmp. |
 | `proc.is_exe_from_memfd` | bool | True when the executable is a memfd (fileless execution). |
 | `proc.stdin.type` | string | fd type of stdin at exec: file, directory, pipe, unix, ipv4, ipv6. |
 | `proc.stdout.type` | string | fd type of stdout at exec. |

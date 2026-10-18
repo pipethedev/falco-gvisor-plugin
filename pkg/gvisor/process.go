@@ -50,6 +50,7 @@ type ProcessInfo struct {
 	IsExecSession bool     `json:"execsess,omitempty"`
 	SHA256        string   `json:"sha256,omitempty"`
 	UpperLayer    bool     `json:"upper,omitempty"`
+	LowerLayer    bool     `json:"lower,omitempty"`
 	FromMemfd     bool     `json:"memfd,omitempty"`
 	StdinType     string   `json:"stdin,omitempty"`
 	StdoutType    string   `json:"stdout,omitempty"`
@@ -112,6 +113,7 @@ func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
 	p.Comm = truncateComm(path.Base(invokedPath(info)))
 	p.SHA256 = hex.EncodeToString(info.GetBinarySha256())
 	p.UpperLayer = info.GetBinaryOverlayfsUpper()
+	p.LowerLayer = info.GetBinaryOverlayfsLower()
 	p.FromMemfd = info.GetBinaryInMemfd()
 	p.StdinType = fdType(info.GetStdin())
 	p.StdoutType = fdType(info.GetStdout())
