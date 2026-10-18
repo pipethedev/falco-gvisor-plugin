@@ -17,7 +17,6 @@ import (
 
 const (
 	deployDir          = "../../deploy"
-	sessionName        = "falco"
 	remoteSink         = "remote"
 	sinkEndpointKey    = "endpoint"
 	envFieldMarker     = "env"
@@ -85,8 +84,8 @@ func TestShippedSessionConfigs(t *testing.T) {
 				t.Error("session must never request environment variables")
 			}
 			session := loadSession(t, name)
-			if session.Name != sessionName {
-				t.Errorf("session name %q must be %q so attach --force replaces the pod-init session", session.Name, sessionName)
+			if session.Name != seccheck.DefaultSessionName {
+				t.Errorf("session name %q must be %q: gVisor rejects any other name and the sandbox runs unmonitored", session.Name, seccheck.DefaultSessionName)
 			}
 			if !session.IgnoreMissing {
 				t.Error("ignore_missing must be true so older runsc versions accept the config")
