@@ -11,14 +11,16 @@ import (
 )
 
 const (
-	maxCommLen       = 15
-	maxArgvBytes     = 4096
-	ptsPrefix        = "/dev/pts/"
-	ttyPrefix        = "/dev/tty"
-	consolePath      = "/dev/console"
-	ptsMajor         = 136
-	devMinorBits     = 8
-	ttyUnknownNumber = 1
+	maxCommLen        = 15
+	maxArgvBytes      = 4096
+	ptsPrefix         = "/dev/pts/"
+	ttyPrefix         = "/dev/tty"
+	consolePath       = "/dev/console"
+	ptsMajor          = 136
+	devMinorBits      = 8
+	devMinorLowMask   = 0xff
+	devMinorHighShift = 12
+	ttyUnknownNumber  = 1
 )
 
 // File descriptor type names, matching Falco's fd.type values.
@@ -203,13 +205,17 @@ func socketFamilyType(family uint32) string {
 	}
 }
 
+func encodeDev(major, minor uint32) uint32 {
+	return minor&devMinorLowMask | major<<devMinorBits | (minor&^devMinorLowMask)<<devMinorHighShift
+}
+
 func ttyOf(fds ...*pb.FdInfo) uint32 {
 	for _, fd := range fds {
 		name := fd.GetPath()
 		switch {
 		case strings.HasPrefix(name, ptsPrefix):
 			if minor, err := strconv.ParseUint(strings.TrimPrefix(name, ptsPrefix), 10, 32); err == nil {
-				return ptsMajor<<devMinorBits | uint32(minor)
+				return encodeDev(ptsMajor, uint32(minor))
 			}
 			return ttyUnknownNumber
 		case strings.HasPrefix(name, ttyPrefix), name == consolePath:

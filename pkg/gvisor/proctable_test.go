@@ -170,6 +170,20 @@ func TestExecCommUsesInvokedPath(t *testing.T) {
 	}
 }
 
+func TestTTYEncoding(t *testing.T) {
+	cases := map[string]uint32{
+		"/dev/pts/3":   34819,
+		"/dev/pts/300": 1083436,
+		"/dev/tty1":    ttyUnknownNumber,
+		"/dev/null":    0,
+	}
+	for path, want := range cases {
+		if got := ttyOf(&pb.FdInfo{Path: path}); got != want {
+			t.Errorf("ttyOf(%s) = %d, want %d", path, got, want)
+		}
+	}
+}
+
 func TestStartPoint(t *testing.T) {
 	table := NewProcessTable(defaultMaxTrackedProcess)
 	snap := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_CONTAINER_START, &pb.Start{
