@@ -1,0 +1,28 @@
+{
+  "description": "A helper shipped in the image under /tmp (overlay lower layer) is not a dropped binary.",
+  "expect": [],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "healthcheck",
+      "exe": "/tmp/tools/healthcheck",
+      "argv": [
+        "/tmp/tools/healthcheck"
+      ],
+      "lower_layer": true
+    }
+  ]
+}

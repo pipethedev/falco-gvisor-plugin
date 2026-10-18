@@ -1,5 +1,5 @@
 {
-  "description": "Payload written to the rootfs /tmp (upper layer) and to /dev/shm (tmpfs, never upper layer in gVisor) and executed.",
+  "description": "Payloads written at runtime and executed: /tmp on the tmpfs runsc mounts over an empty image /tmp (no layer flags), /var/tmp on the overlay upper layer, and /dev/shm (tmpfs). Layer flags as observed with real runsc.",
   "expect": [
     "gVisor Dropped Binary Executed From Temp Directory"
   ],
@@ -12,7 +12,8 @@
       "exe": "/bin/sh",
       "argv": [
         "/bin/sh"
-      ]
+      ],
+      "lower_layer": true
     },
     {
       "point": "sentry/execve",
@@ -22,12 +23,22 @@
       "exe": "/tmp/update",
       "argv": [
         "/tmp/update"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 3,
+      "ppid": 1,
+      "comm": "update",
+      "exe": "/var/tmp/.x/update",
+      "argv": [
+        "/var/tmp/.x/update"
       ],
       "upper_layer": true
     },
     {
       "point": "sentry/execve",
-      "pid": 3,
+      "pid": 4,
       "ppid": 1,
       "comm": "update",
       "exe": "/dev/shm/.cache/update",

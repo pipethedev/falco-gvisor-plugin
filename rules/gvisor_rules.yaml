@@ -300,29 +300,29 @@
 # 4. Drop and execute
 # ---------------------------------------------------------------------------
 
-# gVisor flags a binary as upper-layer only on its rootfs overlay; /dev/shm is a
-# tmpfs where the flag is always false, so executing from it is matched directly.
-- macro: gvisor_tmp_upper_exec
+# A binary in a temp directory was dropped at runtime unless it shipped in the
+# image. Runtime files are on the overlay upper layer, or on a tmpfs (/dev/shm,
+# or the tmpfs runsc mounts over an empty image /tmp) where neither layer flag
+# is set; image files are on the lower layer.
+- macro: gvisor_tmp_dropped_exec
   condition: >
-    (proc.is_exe_upper_layer = true
-     and (proc.exepath startswith /tmp/ or proc.exepath startswith /var/tmp/))
-
-- macro: gvisor_shm_exec
-  condition: (proc.exepath startswith /dev/shm/)
+    ((proc.exepath startswith /tmp/ or proc.exepath startswith /var/tmp/ or proc.exepath startswith /dev/shm/)
+     and (proc.is_exe_upper_layer = true or proc.is_exe_lower_layer = false))
 
 - macro: gvisor_drop_exec_allowlist
   condition: (gvisor_never_true)
 
 - rule: gVisor Dropped Binary Executed From Temp Directory
   desc: >
-    A binary written at runtime was executed from /tmp or /var/tmp (container upper layer),
-    or any binary was executed from /dev/shm.
+    A binary written at runtime (not shipped in the container image) was executed from /tmp,
+    /var/tmp or /dev/shm.
   condition: >
-    gvisor_exec and (gvisor_tmp_upper_exec or gvisor_shm_exec)
+    gvisor_exec and gvisor_tmp_dropped_exec
     and not gvisor_drop_exec_allowlist
   output: >
     Dropped binary executed from temp directory in gVisor sandbox (exepath=%proc.exepath
-    cmdline=%proc.cmdline parent=%proc.pname sha256=%proc.sha256 uid=%user.uid
+    cmdline=%proc.cmdline parent=%proc.pname sha256=%proc.sha256 upper_layer=%proc.is_exe_upper_layer
+    lower_layer=%proc.is_exe_lower_layer uid=%user.uid
     container=%container.name image=%container.image id=%container.id k8s_ns=%k8s.ns.name
     k8s_pod=%k8s.pod.name)
   priority: CRITICAL
