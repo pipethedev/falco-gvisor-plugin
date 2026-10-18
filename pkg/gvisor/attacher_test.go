@@ -146,6 +146,30 @@ func TestAttacherSkipsConnected(t *testing.T) {
 	}
 }
 
+func TestAttacherExpiresBindingsWithoutConnection(t *testing.T) {
+	runner := &fakeRunner{list: runscListJSON}
+	conns := &fakeConns{}
+	a, _ := newTestAttacher(runner, conns)
+	a.Sweep(context.Background())
+
+	runner.mu.Lock()
+	stalePID := runner.pidOfLast["aaa"]
+	runner.calls = nil
+	runner.mu.Unlock()
+	a.Sweep(context.Background())
+
+	conns.mu.Lock()
+	conns.conns = []ConnInfo{{PeerPID: stalePID}}
+	conns.mu.Unlock()
+	runner.mu.Lock()
+	runner.calls = nil
+	runner.mu.Unlock()
+	a.Sweep(context.Background())
+	if got := runner.attached(); !slices.Contains(got, "aaa") {
+		t.Errorf("a connection reusing an expired attach PID kept sandbox aaa from being re-attached: %v", got)
+	}
+}
+
 func TestAttacherFailuresAndTimeouts(t *testing.T) {
 	runner := &fakeRunner{list: runscListJSON, failFor: map[string]bool{"aaa": true}}
 	a, stats := newTestAttacher(runner, &fakeConns{})

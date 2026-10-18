@@ -39,6 +39,11 @@ type runscState struct {
 	Annotations map[string]string `json:"annotations"`
 }
 
+type attachBinding struct {
+	sandboxID string
+	done      bool
+}
+
 type sandboxSet struct {
 	order       []string
 	byContainer map[string]string
@@ -57,7 +62,7 @@ type Attacher struct {
 	attachTimeout time.Duration
 
 	mu       sync.Mutex
-	attached map[int32]string
+	attached map[int32]*attachBinding
 }
 
 // NewAttacher returns an attacher using the runsc settings from cfg.
@@ -71,7 +76,7 @@ func NewAttacher(cfg Config, runner Runner, conns ConnectionLister, stats *Stats
 		stats:         stats,
 		listTimeout:   defaultListTimeout,
 		attachTimeout: defaultAttachTimeout,
-		attached:      make(map[int32]string),
+		attached:      make(map[int32]*attachBinding),
 	}
 }
 
@@ -164,9 +169,19 @@ func (a *Attacher) connectedSandboxes(sandboxes sandboxSet) map[string]bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	connected := map[string]bool{}
-	for _, conn := range a.conns.Connections() {
-		if id, ok := a.attached[conn.PeerPID]; ok && conn.PeerPID != 0 {
-			connected[id] = true
+	conns := a.conns.Connections()
+	live := make(map[int32]bool, len(conns))
+	for _, conn := range conns {
+		live[conn.PeerPID] = true
+	}
+	for pid, binding := range a.attached {
+		if binding.done && !live[pid] {
+			delete(a.attached, pid)
+		}
+	}
+	for _, conn := range conns {
+		if binding, ok := a.attached[conn.PeerPID]; ok && conn.PeerPID != 0 {
+			connected[binding.sandboxID] = true
 		}
 		for _, cid := range conn.ContainerIDs {
 			if id, ok := sandboxes.byContainer[cid]; ok {
@@ -184,8 +199,8 @@ func (a *Attacher) forgetGone(sandboxes sandboxSet) {
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	for pid, id := range a.attached {
-		if !running[id] {
+	for pid, binding := range a.attached {
+		if !running[binding.sandboxID] {
 			delete(a.attached, pid)
 		}
 	}
@@ -195,12 +210,17 @@ func (a *Attacher) attach(ctx context.Context, sandboxID string) bool {
 	ctx, cancel := context.WithTimeout(ctx, a.attachTimeout)
 	defer cancel()
 	a.stats.AttachAttempts.Add(1)
+	binding := &attachBinding{sandboxID: sandboxID}
 	onStart := func(pid int32) {
 		a.mu.Lock()
 		defer a.mu.Unlock()
-		a.attached[pid] = sandboxID
+		a.attached[pid] = binding
 	}
-	if _, err := a.runner.Run(ctx, onStart, a.runscPath, a.attachArgs(sandboxID)...); err != nil {
+	_, err := a.runner.Run(ctx, onStart, a.runscPath, a.attachArgs(sandboxID)...)
+	a.mu.Lock()
+	binding.done = true
+	a.mu.Unlock()
+	if err != nil {
 		a.stats.AttachFailures.Add(1)
 		logger.Printf("attach sandbox %s: %v", shortID(sandboxID), err)
 		return false
