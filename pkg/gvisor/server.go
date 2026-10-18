@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -33,9 +34,10 @@ var (
 	errUnsupportedHandshake = errors.New("unsupported wire version")
 )
 
-// EmitFunc hands an encoded event to Falco. It must not block and returns
-// false when the event could not be queued.
-type EmitFunc func(data []byte, ts time.Time) bool
+// EmitFunc hands an encoded event to Falco on behalf of a sandbox
+// connection (owner). It must not block; it returns ErrQueueFull or
+// ErrQueueShare when the event could not be queued.
+type EmitFunc func(owner uint64, data []byte, ts time.Time) error
 
 // ContainerResolver returns cached metadata for a container id, or nil when
 // it is not known yet. Implementations must not block.
@@ -67,11 +69,14 @@ type Server struct {
 	mu     sync.Mutex
 	conns  map[*sandboxConn]struct{}
 	closed bool
+	nextID atomic.Uint64
 }
 
 type sandboxConn struct {
+	id      uint64
 	conn    *net.UnixConn
 	peerPID int32
+	drops   uint64
 
 	mu           sync.Mutex
 	containerIDs map[string]struct{}
@@ -169,7 +174,7 @@ func (s *Server) acceptLoop() {
 			_ = conn.Close()
 			continue
 		}
-		sc := &sandboxConn{conn: conn, peerPID: pid, containerIDs: map[string]struct{}{}}
+		sc := &sandboxConn{id: s.nextID.Add(1), conn: conn, peerPID: pid, containerIDs: map[string]struct{}{}}
 		if !s.track(sc) {
 			_ = conn.Close()
 			return
@@ -198,6 +203,7 @@ func (s *Server) untrack(sc *sandboxConn) {
 func (s *Server) serve(sc *sandboxConn) {
 	defer s.wg.Done()
 	defer s.untrack(sc)
+	defer sc.logDrops()
 	defer func() { _ = sc.conn.Close() }()
 
 	if err := handshake(sc.conn); err != nil {
@@ -259,8 +265,13 @@ func (s *Server) handlePoint(sc *sandboxConn, table *ProcessTable, point Point) 
 		s.stats.DropContextSize.Add(1)
 		return
 	}
-	if !s.emit(data, pointTime(point)) {
-		s.stats.DropChannelFull.Add(1)
+	if err := s.emit(sc.id, data, pointTime(point)); err != nil {
+		sc.drops++
+		if errors.Is(err, ErrQueueShare) {
+			s.stats.DropQueueShare.Add(1)
+		} else {
+			s.stats.DropChannelFull.Add(1)
+		}
 		return
 	}
 	s.stats.Events.Add(1)
@@ -336,6 +347,18 @@ func (sc *sandboxConn) addContainer(id string) bool {
 	}
 	sc.containerIDs[id] = struct{}{}
 	return true
+}
+
+func (sc *sandboxConn) logDrops() {
+	if sc.drops == 0 {
+		return
+	}
+	info := sc.info()
+	ids := make([]string, 0, len(info.ContainerIDs))
+	for _, id := range info.ContainerIDs {
+		ids = append(ids, shortID(id))
+	}
+	logger.Printf("sandbox connection %d (containers %v) dropped %d events: event queue or its share full", sc.id, ids, sc.drops)
 }
 
 func (sc *sandboxConn) info() ConnInfo {

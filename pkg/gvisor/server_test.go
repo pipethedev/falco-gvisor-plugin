@@ -31,15 +31,15 @@ func newCollector(size int) *collector {
 	return &collector{events: make(chan []byte, size), accept: true}
 }
 
-func (c *collector) emit(data []byte, _ time.Time) bool {
+func (c *collector) emit(_ uint64, data []byte, _ time.Time) error {
 	if !c.accept {
-		return false
+		return ErrQueueFull
 	}
 	select {
 	case c.events <- data:
-		return true
+		return nil
 	default:
-		return false
+		return ErrQueueFull
 	}
 }
 

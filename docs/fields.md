@@ -108,7 +108,8 @@ Differences from Falco's syscall source:
 | `gvisor.stats.connections` | uint64 | gvisor_stats: live sandbox connections. |
 | `gvisor.stats.events_per_second` | uint64 | gvisor_stats: events per second since the previous stats event. |
 | `gvisor.stats.drops` | uint64 | gvisor_stats: total dropped points. |
-| `gvisor.stats.drops_channel_full` | uint64 | gvisor_stats: points dropped because Falco's queue was full. |
+| `gvisor.stats.drops_channel_full` | uint64 | gvisor_stats: points dropped because the event queue's total budget (maxQueueBytes) was full. |
+| `gvisor.stats.drops_queue_share` | uint64 | gvisor_stats: points dropped because one sandbox used its fair share of the event queue (maxQueueBytes divided by connected sandboxes). |
 | `gvisor.stats.drops_truncated` | uint64 | gvisor_stats: points dropped for exceeding maxEventSize. |
 | `gvisor.stats.drops_decode_error` | uint64 | gvisor_stats: points dropped as undecodable. |
 | `gvisor.stats.drops_sandbox` | uint64 | gvisor_stats: points the sandbox reported dropping on its side. |

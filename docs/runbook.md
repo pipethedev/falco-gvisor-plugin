@@ -76,6 +76,7 @@ New containers are monitored at creation. Existing ones are attached by the plug
 | Attach fails with permission errors | Run Falco as root with host PID; mount the state root read-write. |
 | `container.name` empty | Metadata is fetched asynchronously, so the first events of a new container have none. If it stays empty, check the `container metadata for ...` log lines and the runtime socket mount. Use `metadataProvider: cri` under Kubernetes. |
 | `drops_channel_full` grows | Falco is not consuming fast enough: reduce the traced points, check Falco CPU and output back-pressure (slow http outputs). |
+| `drops_queue_share` grows | One sandbox is producing events faster than Falco consumes them and has used its share of `maxQueueBytes`. Other sandboxes keep their share. The plugin logs `sandbox connection N (containers ...) dropped M events` when that connection closes. |
 | `drops_sandbox` grows | The sandbox could not write to the socket in time. Raise `retries`/`backoff_max` in the session (costs workload latency on bursts) or reduce points. |
 | `drops_truncated` grows | Messages exceed `maxEventSize` (very long argv); raise it. |
 | `handshake_rejected` | A sandbox speaks an unsupported wire version: upgrade the plugin to match runsc. |

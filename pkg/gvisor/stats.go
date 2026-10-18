@@ -11,6 +11,7 @@ type Stats struct {
 	TotalConnections     atomic.Uint64
 	Events               atomic.Uint64
 	DropChannelFull      atomic.Uint64
+	DropQueueShare       atomic.Uint64
 	DropTruncated        atomic.Uint64
 	DropDecodeError      atomic.Uint64
 	DropUnsupported      atomic.Uint64
@@ -32,6 +33,7 @@ type StatsSnapshot struct {
 	Events               uint64  `json:"events"`
 	EventsPerSecond      float64 `json:"events_per_second"`
 	DropChannelFull      uint64  `json:"drops_channel_full"`
+	DropQueueShare       uint64  `json:"drops_queue_share"`
 	DropTruncated        uint64  `json:"drops_truncated"`
 	DropDecodeError      uint64  `json:"drops_decode_error"`
 	DropUnsupported      uint64  `json:"drops_unsupported"`
@@ -54,6 +56,7 @@ func (s *Stats) Snapshot(prev StatsSnapshot, now time.Time) StatsSnapshot {
 		TotalConnections:     s.TotalConnections.Load(),
 		Events:               s.Events.Load(),
 		DropChannelFull:      s.DropChannelFull.Load(),
+		DropQueueShare:       s.DropQueueShare.Load(),
 		DropTruncated:        s.DropTruncated.Load(),
 		DropDecodeError:      s.DropDecodeError.Load(),
 		DropUnsupported:      s.DropUnsupported.Load(),
@@ -77,5 +80,5 @@ func (s *Stats) Snapshot(prev StatsSnapshot, now time.Time) StatsSnapshot {
 
 // TotalDrops returns the sum of all drop counters.
 func (s StatsSnapshot) TotalDrops() uint64 {
-	return s.DropChannelFull + s.DropTruncated + s.DropDecodeError + s.DropUnsupported + s.DropContextSize + s.DropSandbox
+	return s.DropChannelFull + s.DropQueueShare + s.DropTruncated + s.DropDecodeError + s.DropUnsupported + s.DropContextSize + s.DropSandbox
 }

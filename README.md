@@ -94,7 +94,7 @@ Add the plugin with [`deploy/falco.config.d/gvisor.yaml`](deploy/falco.config.d/
 | `maxTrackedProcesses` | `4096` | Per-sandbox process table cap |
 | `statsIntervalSeconds` | `60` | Emit a `gvisor_stats` event and log counters; `0` disables |
 | `metadataWaitMillis` | `200` | On a container's first event, how long its sandbox connection waits for metadata before emitting; `0` disables |
-| `maxQueueBytes` | `67108864` (64 MiB) | Byte budget for events waiting for Falco; beyond it events are dropped and counted (`drops_channel_full`) |
+| `maxQueueBytes` | `67108864` (64 MiB) | Byte budget for events waiting for Falco. Each sandbox may use an equal share of it (the budget divided by connected sandboxes, at least two maximum-size events); beyond that its events are dropped and counted (`drops_queue_share`, `drops_channel_full`) |
 
 ### Trace sessions
 

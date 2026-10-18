@@ -7,19 +7,23 @@ import (
 	"time"
 )
 
-const shortWait = 20 * time.Millisecond
+const (
+	shortWait = 20 * time.Millisecond
+	ownerA    = 1
+	ownerB    = 2
+)
 
 func TestQueueByteBudget(t *testing.T) {
 	stats := &Stats{}
-	q := newEventQueue(10, stats)
-	if !q.push(make([]byte, 6), time.Unix(1, 0)) {
-		t.Fatal("push within budget rejected")
+	q := newEventQueue(10, 1, stats)
+	if err := q.push(ownerA, make([]byte, 6), time.Unix(1, 0)); err != nil {
+		t.Fatalf("push within budget: %v", err)
 	}
-	if q.push(make([]byte, 5), time.Unix(2, 0)) {
-		t.Fatal("push over budget accepted")
+	if err := q.push(ownerA, make([]byte, 5), time.Unix(2, 0)); !errors.Is(err, ErrQueueFull) {
+		t.Fatalf("push over budget err = %v", err)
 	}
-	if !q.push(make([]byte, 4), time.Unix(3, 0)) {
-		t.Fatal("push filling the budget exactly rejected")
+	if err := q.push(ownerA, make([]byte, 4), time.Unix(3, 0)); err != nil {
+		t.Fatalf("push filling the budget exactly: %v", err)
 	}
 	if got := stats.QueueBytes.Load(); got != 10 {
 		t.Errorf("queue bytes = %d", got)
@@ -31,20 +35,54 @@ func TestQueueByteBudget(t *testing.T) {
 	if got := stats.QueueBytes.Load(); got != 4 {
 		t.Errorf("queue bytes after pop = %d", got)
 	}
-	if !q.push(make([]byte, 6), time.Unix(4, 0)) {
-		t.Error("budget not released by pop")
+	if err := q.push(ownerA, make([]byte, 6), time.Unix(4, 0)); err != nil {
+		t.Errorf("budget not released by pop: %v", err)
+	}
+}
+
+func TestQueueFairShare(t *testing.T) {
+	stats := &Stats{}
+	stats.Connections.Store(2)
+	q := newEventQueue(100, 10, stats)
+	pushed := 0
+	for q.push(ownerA, make([]byte, 10), time.Now()) == nil {
+		pushed++
+	}
+	if pushed != 5 {
+		t.Errorf("a flooding sandbox queued %d events, want its share of 5", pushed)
+	}
+	if err := q.push(ownerA, make([]byte, 10), time.Now()); !errors.Is(err, ErrQueueShare) {
+		t.Errorf("over-share push err = %v", err)
+	}
+	if err := q.push(ownerB, make([]byte, 10), time.Now()); err != nil {
+		t.Errorf("a second sandbox was starved by the first: %v", err)
+	}
+	if err := q.push(statsOwner, make([]byte, 10), time.Now()); err != nil {
+		t.Errorf("stats events must only be bounded by the total budget: %v", err)
+	}
+	if _, err := q.pop(context.Background(), shortWait); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.push(ownerA, make([]byte, 10), time.Now()); err != nil {
+		t.Errorf("share not released by pop: %v", err)
+	}
+
+	stats.Connections.Store(50)
+	small := newEventQueue(100, 30, stats)
+	if err := small.push(ownerA, make([]byte, 25), time.Now()); err != nil {
+		t.Errorf("minimum share not honoured with many connections: %v", err)
 	}
 }
 
 func TestQueueFIFOAndWait(t *testing.T) {
-	q := newEventQueue(1<<20, &Stats{})
+	q := newEventQueue(1<<20, 1, &Stats{})
 	if _, err := q.pop(context.Background(), shortWait); !errors.Is(err, ErrNoEvent) {
 		t.Fatalf("empty pop err = %v", err)
 	}
 	go func() {
 		time.Sleep(shortWait / 2)
 		for i := range 3 {
-			q.push([]byte{byte(i)}, time.Unix(int64(i), 0))
+			_ = q.push(ownerA, []byte{byte(i)}, time.Unix(int64(i), 0))
 		}
 	}()
 	for i := range 3 {
@@ -56,10 +94,10 @@ func TestQueueFIFOAndWait(t *testing.T) {
 }
 
 func TestQueueCloseAndCancel(t *testing.T) {
-	q := newEventQueue(1<<20, &Stats{})
-	q.push([]byte{1}, time.Now())
+	q := newEventQueue(1<<20, 1, &Stats{})
+	_ = q.push(ownerA, []byte{1}, time.Now())
 	q.close()
-	if q.push([]byte{2}, time.Now()) {
+	if err := q.push(ownerA, []byte{2}, time.Now()); err == nil {
 		t.Error("push after close accepted")
 	}
 	if _, err := q.pop(context.Background(), shortWait); err != nil {
@@ -69,7 +107,7 @@ func TestQueueCloseAndCancel(t *testing.T) {
 		t.Errorf("pop after drain err = %v", err)
 	}
 
-	open := newEventQueue(1<<20, &Stats{})
+	open := newEventQueue(1<<20, 1, &Stats{})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := open.pop(ctx, testWait); !errors.Is(err, context.Canceled) {
