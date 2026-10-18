@@ -9,7 +9,7 @@ FALCO_IMAGE ?= falcosecurity/falco:0.45.0
 TEST_IMAGE ?= alpine:3.20
 HOST_ARCH ?= $(shell $(GO) env GOARCH)
 DIST := dist
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+VERSION ?= 0.1.0
 LDFLAGS := -s -w -X github.com/falcosecurity/plugins/plugins/gvisor/pkg/gvisor.PluginVersion=$(VERSION:v%=%)
 
 .PHONY: all build build-linux $(addprefix build-linux-,$(ARCHES)) test test-linux test-integration rules-test lint generate rules-tarball image clean

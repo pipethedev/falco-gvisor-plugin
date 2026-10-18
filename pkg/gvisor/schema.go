@@ -2,7 +2,7 @@ package gvisor
 
 const initSchema = `{
   "$schema": "http://json-schema.org/draft-04/schema#",
-  "type": "object",
+  "type": ["object", "null"],
   "additionalProperties": false,
   "properties": {
     "socketPath": {"type": "string", "default": "/run/falco/gvisor.sock", "description": "Unix seqpacket socket the gVisor remote sink connects to; must match the sink endpoint"},

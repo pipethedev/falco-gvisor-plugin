@@ -9,7 +9,7 @@ import (
 )
 
 func TestParseConfigDefaults(t *testing.T) {
-	for _, raw := range []string{"", "  ", "{}"} {
+	for _, raw := range []string{"", "  ", "{}", "null"} {
 		cfg, err := ParseConfig(raw)
 		if err != nil {
 			t.Fatalf("ParseConfig(%q): %v", raw, err)
