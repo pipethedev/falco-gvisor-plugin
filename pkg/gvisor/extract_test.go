@@ -254,6 +254,29 @@ func TestExtractWithoutMetadata(t *testing.T) {
 	}
 }
 
+func TestExtractUnknownProcessValuesAbsent(t *testing.T) {
+	ctx := testContext(9, 1, "")
+	ctx.Credentials = nil
+	ctx.Cwd = ""
+	p := mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{ContextData: ctx, Exit: &pb.Exit{}, Address: sockaddrIPv4(net.IPv4(10, 0, 0, 1), 80)})
+	data, err := EncodeEvent(EventContext{Snapshot: NewProcessTable(1).Apply(p)}, p.Raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evt, err := DecodeEvent(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{fieldUserUID, fieldGroupGID, fieldProcExePath, fieldProcExe, fieldProcArgs, fieldProcCwd, fieldProcName, fieldProcCmdline} {
+		if v := get(t, &evt, name); v != nil {
+			t.Errorf("%s = %#v for a process seen without exec or credentials; want absent", name, v)
+		}
+	}
+	if get(t, &evt, fieldProcPid) != uint64(9) {
+		t.Error("pid must stay present")
+	}
+}
+
 func TestExtractStats(t *testing.T) {
 	data, err := EncodeStats(StatsSnapshot{Connections: 3, Events: 10, EventsPerSecond: 12.7, DropChannelFull: 2, DropSandbox: 1, AttachFailures: 1})
 	if err != nil {

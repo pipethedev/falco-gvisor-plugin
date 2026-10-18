@@ -42,12 +42,12 @@ var pointExtractors = map[string]extractorFunc{
 
 	fieldProcPid:        proc(func(p ProcessInfo) any { return uint64(p.Pid) }),
 	fieldProcPpid:       proc(func(p ProcessInfo) any { return uint64(p.Ppid) }),
-	fieldProcName:       proc(func(p ProcessInfo) any { return p.Comm }),
-	fieldProcExe:        proc(func(p ProcessInfo) any { return p.Exe() }),
-	fieldProcExePath:    proc(func(p ProcessInfo) any { return p.ExePath }),
-	fieldProcArgs:       proc(func(p ProcessInfo) any { return p.Args() }),
-	fieldProcCmdline:    proc(func(p ProcessInfo) any { return p.Cmdline() }),
-	fieldProcCwd:        proc(func(p ProcessInfo) any { return p.Cwd }),
+	fieldProcName:       procString(func(p ProcessInfo) string { return p.Comm }),
+	fieldProcExe:        procString(ProcessInfo.Exe),
+	fieldProcExePath:    procString(func(p ProcessInfo) string { return p.ExePath }),
+	fieldProcArgs:       extractProcArgs,
+	fieldProcCmdline:    procString(ProcessInfo.Cmdline),
+	fieldProcCwd:        procString(func(p ProcessInfo) string { return p.Cwd }),
 	fieldProcTTY:        proc(func(p ProcessInfo) any { return uint64(p.TTY) }),
 	fieldProcUpperLayer: proc(func(p ProcessInfo) any { return p.UpperLayer }),
 	fieldProcFromMemfd:  proc(func(p ProcessInfo) any { return p.FromMemfd }),
@@ -55,8 +55,8 @@ var pointExtractors = map[string]extractorFunc{
 	fieldProcStdoutType: procString(func(p ProcessInfo) string { return p.StdoutType }),
 	fieldProcStderrType: procString(func(p ProcessInfo) string { return p.StderrType }),
 	fieldProcSHA256:     procString(func(p ProcessInfo) string { return p.SHA256 }),
-	fieldUserUID:        proc(func(p ProcessInfo) any { return uint64(p.UID) }),
-	fieldGroupGID:       proc(func(p ProcessInfo) any { return uint64(p.GID) }),
+	fieldUserUID:        procCreds(func(p ProcessInfo) uint32 { return p.UID }),
+	fieldGroupGID:       procCreds(func(p ProcessInfo) uint32 { return p.GID }),
 	fieldProcPName:      ancestor(1, func(p ProcessInfo) string { return p.Comm }),
 	fieldProcPExePath:   ancestor(1, func(p ProcessInfo) string { return p.ExePath }),
 	fieldProcPCmdline:   ancestor(1, ProcessInfo.Cmdline),
@@ -227,6 +227,22 @@ func proc(get func(ProcessInfo) any) extractorFunc {
 		}
 		return get(e.Context.Process), true
 	}
+}
+
+func procCreds(get func(ProcessInfo) uint32) extractorFunc {
+	return func(e *Event, _ FieldRequest) (any, bool) {
+		if !e.Context.Process.HasCreds {
+			return nil, false
+		}
+		return uint64(get(e.Context.Process)), true
+	}
+}
+
+func extractProcArgs(e *Event, _ FieldRequest) (any, bool) {
+	if len(e.Context.Process.Argv) == 0 {
+		return nil, false
+	}
+	return e.Context.Process.Args(), true
 }
 
 func procString(get func(ProcessInfo) string) extractorFunc {

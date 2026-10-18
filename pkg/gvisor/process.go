@@ -43,6 +43,7 @@ type ProcessInfo struct {
 	Comm          string   `json:"comm,omitempty"`
 	UID           uint32   `json:"uid"`
 	GID           uint32   `json:"gid"`
+	HasCreds      bool     `json:"creds,omitempty"`
 	StartTimeNs   int64    `json:"start,omitempty"`
 	IsExecSession bool     `json:"execsess,omitempty"`
 	SHA256        string   `json:"sha256,omitempty"`
@@ -93,6 +94,7 @@ func (p *ProcessInfo) applyContext(ctx *pb.ContextData) {
 	if creds := ctx.GetCredentials(); creds != nil {
 		p.UID = creds.GetEffectiveUid()
 		p.GID = creds.GetEffectiveGid()
+		p.HasCreds = true
 	}
 	if ctx.GetIsExecSession() {
 		p.IsExecSession = true
