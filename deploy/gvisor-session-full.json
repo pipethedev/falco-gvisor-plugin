@@ -159,9 +159,6 @@
     },
     {
       "name": "syscall/open/exit",
-      "optional_fields": [
-        "fd_path"
-      ],
       "context_fields": [
         "time",
         "container_id",
