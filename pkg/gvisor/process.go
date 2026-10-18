@@ -105,7 +105,7 @@ func (p *ProcessInfo) applyContext(ctx *pb.ContextData) {
 func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
 	p.ExePath = info.GetBinaryPath()
 	p.Argv = budgetArgv(info.GetArgv(), maxArgvBytes)
-	p.Comm = truncateComm(path.Base(p.ExePath))
+	p.Comm = truncateComm(path.Base(invokedPath(info)))
 	p.SHA256 = hex.EncodeToString(info.GetBinarySha256())
 	p.UpperLayer = info.GetBinaryOverlayfsUpper()
 	p.FromMemfd = info.GetBinaryInMemfd()
@@ -114,6 +114,13 @@ func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
 	p.StderrType = fdType(info.GetStderr())
 	p.TTY = ttyOf(info.GetStdin(), info.GetStdout(), info.GetStderr())
 	p.StdinPipeComm = truncateComm(info.GetPipeInputProc().GetContextData().GetProcessName())
+}
+
+func invokedPath(info *pb.ExecveInfo) string {
+	if execfn := info.GetExecfn(); execfn != "" {
+		return execfn
+	}
+	return info.GetBinaryPath()
 }
 
 func (p *ProcessInfo) applyStart(start *pb.Start) {

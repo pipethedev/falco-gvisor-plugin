@@ -157,6 +157,19 @@ func TestBudgetArgv(t *testing.T) {
 	}
 }
 
+func TestExecCommUsesInvokedPath(t *testing.T) {
+	table := NewProcessTable(defaultMaxTrackedProcess)
+	snap := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
+		ContextData: testContext(5, 1, "sh"),
+		BinaryPath:  "/usr/bin/busybox",
+		Execfn:      "/bin/cat",
+		Argv:        []string{"cat", "/etc/hosts"},
+	}))
+	if snap.Process.Comm != "cat" || snap.Process.ExePath != "/usr/bin/busybox" {
+		t.Errorf("comm=%q exepath=%q, want comm from execfn and exepath from the resolved binary", snap.Process.Comm, snap.Process.ExePath)
+	}
+}
+
 func TestStartPoint(t *testing.T) {
 	table := NewProcessTable(defaultMaxTrackedProcess)
 	snap := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_CONTAINER_START, &pb.Start{
