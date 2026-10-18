@@ -20,6 +20,8 @@ type fakeResolver map[string]*ContainerInfo
 
 func (f fakeResolver) Lookup(id string) *ContainerInfo { return f[id] }
 
+func (f fakeResolver) Await(id string, _ time.Duration) *ContainerInfo { return f[id] }
+
 type collector struct {
 	events chan []byte
 	accept bool
@@ -145,6 +147,27 @@ func TestServerEnrichesEvents(t *testing.T) {
 		conns := srv.Connections()
 		return len(conns) == 1 && len(conns[0].ContainerIDs) == 1 && conns[0].ContainerIDs[0] == testContainerID
 	})
+}
+
+func TestServerWaitsForFirstContainerMetadata(t *testing.T) {
+	c := newCollector(4)
+	stub := &stubFetcher{info: &ContainerInfo{ID: testContainerID, Name: "web"}, release: make(chan struct{})}
+	cache := NewMetadataCache(stub, time.Minute, nil)
+	t.Cleanup(func() { _ = cache.Close() })
+	srv, _ := startServer(t, nil, c, cache)
+	conn := connectSandbox(t, srv.socketPath)
+
+	go func() {
+		time.Sleep(30 * time.Millisecond)
+		close(stub.release)
+	}()
+	send(t, conn, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
+		ContextData: testContext(1, 0, "sh"), BinaryPath: "/tmp/xmrig", Argv: []string{"xmrig"},
+	}))
+	evt := c.next(t)
+	if evt.Context.Container == nil || evt.Context.Container.Name != "web" {
+		t.Errorf("first event of a new container lacks metadata resolved within metadataWaitMillis: %+v", evt.Context.Container)
+	}
 }
 
 func TestServerRejectsBadHandshakeOnly(t *testing.T) {

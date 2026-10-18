@@ -22,6 +22,8 @@ const (
 	defaultMaxTrackedProcess  = 4096
 	defaultStatsInterval      = 60
 	defaultMaxQueueBytes      = 64 << 20
+	defaultMetadataWaitMillis = 200
+	maxMetadataWaitMillis     = 5000
 	minMaxQueueBytes          = 1 << 20
 	maxMaxQueueBytes          = 4 << 30
 	minMaxEventSize           = 1024
@@ -51,6 +53,7 @@ type Config struct {
 	MaxTrackedProcesses     int      `json:"maxTrackedProcesses"`
 	StatsIntervalSeconds    int      `json:"statsIntervalSeconds"`
 	MaxQueueBytes           int      `json:"maxQueueBytes"`
+	MetadataWaitMillis      int      `json:"metadataWaitMillis"`
 }
 
 // DefaultConfig returns the configuration used for keys absent from the init config.
@@ -71,6 +74,7 @@ func DefaultConfig() Config {
 		MaxTrackedProcesses:     defaultMaxTrackedProcess,
 		StatsIntervalSeconds:    defaultStatsInterval,
 		MaxQueueBytes:           defaultMaxQueueBytes,
+		MetadataWaitMillis:      defaultMetadataWaitMillis,
 	}
 }
 
@@ -112,6 +116,9 @@ func (c Config) validate() error {
 	if c.MaxQueueBytes < minMaxQueueBytes || c.MaxQueueBytes > maxMaxQueueBytes || c.MaxQueueBytes < 2*c.MaxEventSize {
 		errs = append(errs, fmt.Errorf("%s: maxQueueBytes must be in [%d, %d] and at least twice maxEventSize", errInvalidConfigPrefix, minMaxQueueBytes, maxMaxQueueBytes))
 	}
+	if c.MetadataWaitMillis < 0 || c.MetadataWaitMillis > maxMetadataWaitMillis {
+		errs = append(errs, fmt.Errorf("%s: metadataWaitMillis must be in [0, %d]", errInvalidConfigPrefix, maxMetadataWaitMillis))
+	}
 	if c.MaxTrackedProcesses < 1 || c.MaxTrackedProcesses > maxMaxTrackedProcesses {
 		errs = append(errs, fmt.Errorf("%s: maxTrackedProcesses must be in [1, %d]", errInvalidConfigPrefix, maxMaxTrackedProcesses))
 	}
@@ -138,6 +145,10 @@ func (c Config) attachInterval() time.Duration {
 
 func (c Config) metadataCacheTTL() time.Duration {
 	return time.Duration(c.MetadataCacheTTLSeconds) * time.Second
+}
+
+func (c Config) metadataWait() time.Duration {
+	return time.Duration(c.MetadataWaitMillis) * time.Millisecond
 }
 
 func (c Config) statsInterval() time.Duration {

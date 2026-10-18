@@ -272,3 +272,29 @@ func TestMetadataCacheDisabled(t *testing.T) {
 		t.Error(err)
 	}
 }
+
+func TestMetadataCacheAwait(t *testing.T) {
+	stub := &stubFetcher{info: &ContainerInfo{ID: testContainerID, Name: "web"}, release: make(chan struct{})}
+	cache := NewMetadataCache(stub, time.Minute, nil)
+	t.Cleanup(func() { _ = cache.Close() })
+
+	start := time.Now()
+	if info := cache.Await(testContainerID, 50*time.Millisecond); info != nil {
+		t.Fatal("expected nil while the fetch is blocked")
+	}
+	if elapsed := time.Since(start); elapsed > testWait {
+		t.Fatalf("Await ignored its timeout: %v", elapsed)
+	}
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		close(stub.release)
+	}()
+	other := strings.Repeat("b", 64)
+	if info := cache.Await(other, testWait); info == nil || info.Name != "web" {
+		t.Errorf("Await did not return metadata resolved within the wait: %+v", info)
+	}
+	if info := cache.Await(other, 0); info == nil {
+		t.Error("cached metadata must be returned without waiting")
+	}
+}

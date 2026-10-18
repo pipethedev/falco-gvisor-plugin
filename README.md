@@ -93,6 +93,7 @@ Add the plugin with [`deploy/falco.config.d/gvisor.yaml`](deploy/falco.config.d/
 | `metadataCacheTTLSeconds` | `600` | Metadata cache lifetime |
 | `maxTrackedProcesses` | `4096` | Per-sandbox process table cap |
 | `statsIntervalSeconds` | `60` | Emit a `gvisor_stats` event and log counters; `0` disables |
+| `metadataWaitMillis` | `200` | On a container's first event, how long its sandbox connection waits for metadata before emitting; `0` disables |
 | `maxQueueBytes` | `67108864` (64 MiB) | Byte budget for events waiting for Falco; beyond it events are dropped and counted (`drops_channel_full`) |
 
 ### Trace sessions
@@ -138,7 +139,7 @@ The gVisor module is `gvisor.dev/gvisor` from its `go` branch (see `go.mod` for 
 
 - Visibility is limited to the configured trace points; the lean profile does not trace file opens.
 - `proc.pid` values are sandbox-internal.
-- Container metadata is empty for the first events of a new container, until the asynchronous lookup completes.
+- Container metadata is fetched asynchronously. A new container's first event waits up to `metadataWaitMillis` for it; if the runtime answers slower, early events carry only `container.id`.
 - Sandboxes are re-attached by polling (`attachIntervalSeconds`), not in real time, after a Falco restart.
 - Responding to alerts (stopping containers) is out of scope; consume Falco's output with a separate responder.
 

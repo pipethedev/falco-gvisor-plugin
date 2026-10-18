@@ -41,7 +41,7 @@ type MetadataCache struct {
 
 	mu       sync.Mutex
 	entries  map[string]metadataEntry
-	inflight map[string]struct{}
+	inflight map[string]chan struct{}
 }
 
 // NewMetadataCache returns a cache over fetcher. A nil fetcher disables
@@ -62,7 +62,7 @@ func NewMetadataCache(fetcher MetadataFetcher, ttl time.Duration, allowlist []st
 		cancel:    cancel,
 		sem:       make(chan struct{}, metadataConcurrency),
 		entries:   make(map[string]metadataEntry),
-		inflight:  make(map[string]struct{}),
+		inflight:  make(map[string]chan struct{}),
 	}
 }
 
@@ -96,6 +96,28 @@ func (m *MetadataCache) Lookup(containerID string) *ContainerInfo {
 	return entry.info
 }
 
+// Await is Lookup that, for a container with no cached metadata, waits up
+// to timeout for the fetch it starts to finish.
+func (m *MetadataCache) Await(containerID string, timeout time.Duration) *ContainerInfo {
+	if info := m.Lookup(containerID); info != nil || m.fetcher == nil || timeout <= 0 {
+		return info
+	}
+	m.mu.Lock()
+	done, ok := m.inflight[containerID]
+	m.mu.Unlock()
+	if !ok {
+		return m.Lookup(containerID)
+	}
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+	case <-m.ctx.Done():
+	}
+	return m.Lookup(containerID)
+}
+
 // Close cancels pending fetches, waits for them and closes the fetcher.
 func (m *MetadataCache) Close() error {
 	m.cancel()
@@ -115,7 +137,7 @@ func (m *MetadataCache) scheduleLocked(containerID string) {
 	default:
 		return
 	}
-	m.inflight[containerID] = struct{}{}
+	m.inflight[containerID] = make(chan struct{})
 	m.wg.Add(1)
 	go m.fetch(containerID)
 }
@@ -130,6 +152,7 @@ func (m *MetadataCache) fetch(containerID string) {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	close(m.inflight[containerID])
 	delete(m.inflight, containerID)
 	if err != nil {
 		logger.Printf("container metadata for %s: %v", shortID(containerID), err)

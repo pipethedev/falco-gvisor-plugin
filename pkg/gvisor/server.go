@@ -41,6 +41,7 @@ type EmitFunc func(data []byte, ts time.Time) bool
 // it is not known yet. Implementations must not block.
 type ContainerResolver interface {
 	Lookup(containerID string) *ContainerInfo
+	Await(containerID string, timeout time.Duration) *ContainerInfo
 }
 
 // ConnInfo describes one live sandbox connection.
@@ -55,6 +56,7 @@ type Server struct {
 	socketPath   string
 	maxEventSize int
 	maxProcesses int
+	metadataWait time.Duration
 	emit         EmitFunc
 	resolver     ContainerResolver
 	stats        *Stats
@@ -81,6 +83,7 @@ func NewServer(cfg Config, emit EmitFunc, resolver ContainerResolver, stats *Sta
 		socketPath:   cfg.SocketPath,
 		maxEventSize: cfg.MaxEventSize,
 		maxProcesses: cfg.MaxTrackedProcesses,
+		metadataWait: cfg.metadataWait(),
 		emit:         emit,
 		resolver:     resolver,
 		stats:        stats,
@@ -245,8 +248,11 @@ func (s *Server) handlePoint(sc *sandboxConn, table *ProcessTable, point Point) 
 	containerID := pointContainerID(point)
 	ctx := EventContext{Snapshot: snap, Arch: point.Arch}
 	if containerID != "" {
-		sc.addContainer(containerID)
-		ctx.Container = s.resolver.Lookup(containerID)
+		if sc.addContainer(containerID) {
+			ctx.Container = s.resolver.Await(containerID, s.metadataWait)
+		} else {
+			ctx.Container = s.resolver.Lookup(containerID)
+		}
 	}
 	data, err := EncodeEvent(ctx, point.Raw)
 	if err != nil {
@@ -322,10 +328,14 @@ func pointTime(p Point) time.Time {
 	return time.Now()
 }
 
-func (sc *sandboxConn) addContainer(id string) {
+func (sc *sandboxConn) addContainer(id string) bool {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
+	if _, seen := sc.containerIDs[id]; seen {
+		return false
+	}
 	sc.containerIDs[id] = struct{}{}
+	return true
 }
 
 func (sc *sandboxConn) info() ConnInfo {
