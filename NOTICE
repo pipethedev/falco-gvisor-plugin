@@ -1,0 +1,5 @@
+falco-gvisor-plugin
+Copyright 2026 The Falco Authors
+
+This product includes software developed at Google LLC (gVisor,
+gvisor.dev/gvisor), licensed under the Apache License, Version 2.0.

@@ -1,0 +1,21 @@
+version: "2"
+linters:
+  enable:
+    - errorlint
+    - gocritic
+    - misspell
+    - revive
+    - unconvert
+    - unparam
+    - bodyclose
+    - noctx
+  settings:
+    revive:
+      rules:
+        - name: exported
+        - name: var-naming
+        - name: unexported-return
+formatters:
+  enable:
+    - gofmt
+    - goimports

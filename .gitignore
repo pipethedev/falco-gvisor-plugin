@@ -1,0 +1,5 @@
+/libgvisor.so
+/libgvisor.h
+/dist/
+*.test
+*.out
