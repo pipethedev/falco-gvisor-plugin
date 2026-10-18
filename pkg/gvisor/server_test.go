@@ -11,13 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"go.uber.org/goleak"
 	"google.golang.org/protobuf/proto"
 	pb "gvisor.dev/gvisor/pkg/sentry/seccheck/points/points_go_proto"
 	"gvisor.dev/gvisor/pkg/sentry/seccheck/sinks/remote/wire"
 )
-
-const testWait = 5 * time.Second
 
 type fakeResolver map[string]*ContainerInfo
 
@@ -118,21 +115,6 @@ func send(t *testing.T, conn *net.UnixConn, pkt []byte) {
 	if _, err := conn.Write(pkt); err != nil {
 		t.Fatal(err)
 	}
-}
-
-func waitFor(t *testing.T, what string, cond func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(testWait)
-	for !cond() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-func TestMain(m *testing.M) {
-	goleak.VerifyTestMain(m)
 }
 
 func TestServerEnrichesEvents(t *testing.T) {

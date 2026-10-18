@@ -2,12 +2,16 @@ package gvisor
 
 import (
 	"testing"
+	"time"
+
+	"go.uber.org/goleak"
 
 	"google.golang.org/protobuf/proto"
 	pb "gvisor.dev/gvisor/pkg/sentry/seccheck/points/points_go_proto"
 )
 
 const (
+	testWait        = 5 * time.Second
 	testContainerID = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 )
 
@@ -51,4 +55,19 @@ func sysnoOf(t testing.TB, name string) uint64 {
 	}
 	t.Fatalf("no syscall %q on this arch", name)
 	return 0
+}
+
+func TestMain(m *testing.M) {
+	goleak.VerifyTestMain(m)
+}
+
+func waitFor(t *testing.T, what string, cond func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(testWait)
+	for !cond() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
