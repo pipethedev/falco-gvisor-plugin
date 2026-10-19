@@ -76,8 +76,25 @@ func TestProcessTableLifecycle(t *testing.T) {
 	if exitSnap.Process.ExePath != "/tmp/xmrig" {
 		t.Error("exit snapshot lost process state")
 	}
-	if _, ok := table.lookup(2); ok {
-		t.Error("leader exit did not remove the process")
+	worker := testContext(2, 1, "xmrig")
+	worker.ThreadId = 9
+	sibling := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{ContextData: worker, Exit: &pb.Exit{}}))
+	if p := sibling.Process; p.ExePath != "/tmp/xmrig" || !p.UpperLayer || p.SHA256 != "dead" {
+		t.Errorf("a thread still running after its leader exited lost the process identity: %+v", p)
+	}
+}
+
+func TestProcessTableEvictsExitedFirst(t *testing.T) {
+	table := NewProcessTable(2)
+	table.Apply(execPoint(t, 2, 1, "/usr/bin/live", "live"))
+	table.Apply(execPoint(t, 3, 1, "/usr/bin/done", "done"))
+	table.Apply(exitPoint(t, 3, 3))
+	table.Apply(execPoint(t, 4, 1, "/usr/bin/new", "new"))
+	if _, ok := table.lookup(2); !ok {
+		t.Error("a live process was evicted before one that had exited")
+	}
+	if _, ok := table.lookup(3); ok {
+		t.Error("the exited process was not evicted first")
 	}
 }
 

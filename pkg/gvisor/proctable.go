@@ -106,7 +106,7 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 		snap.L4 = t.sockets[proc.Pid][c.GetFd()]
 	}
 	if exit, ok := p.Msg.(*pb.TaskExit); ok && isThreadGroupLeader(exit.GetContextData()) {
-		t.remove(proc.Pid)
+		t.retire(proc.Pid)
 	}
 	return snap
 }
@@ -145,6 +145,17 @@ func (t *ProcessTable) lookup(pid int32) (*ProcessInfo, bool) {
 		return nil, false
 	}
 	return elem.Value.(*ProcessInfo), true
+}
+
+// retire makes a process the first to be evicted. gVisor reports the
+// leader's task_exit even when other threads of the group keep running (the
+// leader called pthread_exit, or another thread is exec'ing), so the row is
+// kept: a later event from the group moves it back to the front. A reused
+// pid is recognised by its new start time or by the clone that creates it.
+func (t *ProcessTable) retire(pid int32) {
+	if elem, ok := t.entries[pid]; ok {
+		t.lru.MoveToBack(elem)
+	}
 }
 
 func (t *ProcessTable) remove(pid int32) {
