@@ -14,6 +14,9 @@ const maxAncestors = 8
 type Snapshot struct {
 	Process   ProcessInfo   `json:"proc"`
 	Ancestors []ProcessInfo `json:"anc,omitempty"`
+	// PrevUID is the effective uid before a credential-changing syscall,
+	// set only on setuid-family events for processes seen before.
+	PrevUID *uint32 `json:"prevuid,omitempty"`
 }
 
 // ProcessTable tracks the processes of one sandbox, keyed by thread-group id.
@@ -46,6 +49,11 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 		return Snapshot{}
 	}
 	proc := t.upsert(ctx.GetThreadGroupId())
+	var prevUID *uint32
+	if isCredentialChange(p.Msg) && proc.HasCreds {
+		uid := proc.UID
+		prevUID = &uid
+	}
 	proc.applyContext(ctx)
 
 	switch m := p.Msg.(type) {
@@ -58,6 +66,7 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 	}
 
 	snap := t.snapshot(proc)
+	snap.PrevUID = prevUID
 	if exit, ok := p.Msg.(*pb.TaskExit); ok && isThreadGroupLeader(exit.GetContextData()) {
 		t.remove(proc.Pid)
 	}
@@ -134,6 +143,15 @@ func (t *ProcessTable) snapshot(proc *ProcessInfo) Snapshot {
 		ppid = parent.Ppid
 	}
 	return snap
+}
+
+func isCredentialChange(msg any) bool {
+	switch msg.(type) {
+	case *pb.Setid, *pb.Setresid:
+		return true
+	default:
+		return false
+	}
 }
 
 func isThreadGroupLeader(ctx *pb.ContextData) bool {

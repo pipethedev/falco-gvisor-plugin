@@ -51,6 +51,8 @@ var messageFactories = map[pb.MessageType]func() proto.Message{
 	pb.MessageType_MESSAGE_SYSCALL_ACCEPT:            func() proto.Message { return &pb.Accept{} },
 	pb.MessageType_MESSAGE_SYSCALL_LISTEN:            func() proto.Message { return &pb.Listen{} },
 	pb.MessageType_MESSAGE_SYSCALL_PTRACE:            func() proto.Message { return &pb.Ptrace{} },
+	pb.MessageType_MESSAGE_SYSCALL_SETID:             func() proto.Message { return &pb.Setid{} },
+	pb.MessageType_MESSAGE_SYSCALL_SETRESID:          func() proto.Message { return &pb.Setresid{} },
 }
 
 // DecodePoint parses one seqpacket message: a wire header followed by a

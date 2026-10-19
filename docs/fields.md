@@ -35,6 +35,14 @@ Differences from Falco's syscall source:
 | `evt.arg.domain` | string | Socket domain, e.g. AF_INET, AF_PACKET. |
 | `evt.arg.type` | string | Socket type, e.g. SOCK_STREAM, SOCK_RAW. |
 | `evt.arg.request` | string | ptrace request, e.g. PTRACE_ATTACH. |
+| `evt.arg.uid` | uint64 | setuid: requested uid. |
+| `evt.arg.gid` | uint64 | setgid: requested gid. |
+| `evt.arg.ruid` | uint64 | setresuid: requested real uid (4294967295 means unchanged). |
+| `evt.arg.euid` | uint64 | setresuid: requested effective uid (4294967295 means unchanged). |
+| `evt.arg.suid` | uint64 | setresuid: requested saved uid (4294967295 means unchanged). |
+| `evt.arg.rgid` | uint64 | setresgid: requested real gid (4294967295 means unchanged). |
+| `evt.arg.egid` | uint64 | setresgid: requested effective gid (4294967295 means unchanged). |
+| `evt.arg.sgid` | uint64 | setresgid: requested saved gid (4294967295 means unchanged). |
 
 ## File descriptor
 
@@ -103,6 +111,7 @@ Differences from Falco's syscall source:
 | `gvisor.point` | string | gVisor trace point, e.g. syscall/connect/exit or sentry/execve. |
 | `gvisor.anames` | list of string | Names of all known ancestors, nearest first; use with intersects / in. |
 | `gvisor.exit_status` | uint64 | Exit status for task_exit and exit_notify_parent points. |
+| `gvisor.prev_uid` | uint64 | setuid-family events: the effective uid the process had before the call. Absent if the process had not been seen before. |
 | `gvisor.stdin_pipe_proc` | string | Name of the process writing to this process's stdin pipe at exec, e.g. curl in curl \| sh (requires pipe_proc_info on sentry/execve). |
 
 ## Stats (`evt.type = gvisor_stats`)

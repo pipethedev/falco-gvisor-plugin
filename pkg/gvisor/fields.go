@@ -36,6 +36,14 @@ const (
 	fieldEvtArgDomain   = "evt.arg.domain"
 	fieldEvtArgType     = "evt.arg.type"
 	fieldEvtArgRequest  = "evt.arg.request"
+	fieldEvtArgUID      = "evt.arg.uid"
+	fieldEvtArgGID      = "evt.arg.gid"
+	fieldEvtArgRUID     = "evt.arg.ruid"
+	fieldEvtArgEUID     = "evt.arg.euid"
+	fieldEvtArgSUID     = "evt.arg.suid"
+	fieldEvtArgRGID     = "evt.arg.rgid"
+	fieldEvtArgEGID     = "evt.arg.egid"
+	fieldEvtArgSGID     = "evt.arg.sgid"
 
 	fieldFDName      = "fd.name"
 	fieldFDNameRaw   = "fd.nameraw"
@@ -88,6 +96,7 @@ const (
 	fieldGvisorANames        = "gvisor.anames"
 	fieldGvisorExitStatus    = "gvisor.exit_status"
 	fieldGvisorStdinPipeProc = "gvisor.stdin_pipe_proc"
+	fieldGvisorPrevUID       = "gvisor.prev_uid"
 
 	fieldStatsConnections     = "gvisor.stats.connections"
 	fieldStatsEventsPerSecond = "gvisor.stats.events_per_second"
@@ -126,6 +135,14 @@ var fieldDefs = []FieldDef{
 	field(fieldEvtArgDomain, typeString, "Socket domain, e.g. AF_INET, AF_PACKET."),
 	field(fieldEvtArgType, typeString, "Socket type, e.g. SOCK_STREAM, SOCK_RAW."),
 	field(fieldEvtArgRequest, typeString, "ptrace request, e.g. PTRACE_ATTACH."),
+	field(fieldEvtArgUID, typeUint64, "setuid: requested uid."),
+	field(fieldEvtArgGID, typeUint64, "setgid: requested gid."),
+	field(fieldEvtArgRUID, typeUint64, "setresuid: requested real uid (4294967295 means unchanged)."),
+	field(fieldEvtArgEUID, typeUint64, "setresuid: requested effective uid (4294967295 means unchanged)."),
+	field(fieldEvtArgSUID, typeUint64, "setresuid: requested saved uid (4294967295 means unchanged)."),
+	field(fieldEvtArgRGID, typeUint64, "setresgid: requested real gid (4294967295 means unchanged)."),
+	field(fieldEvtArgEGID, typeUint64, "setresgid: requested effective gid (4294967295 means unchanged)."),
+	field(fieldEvtArgSGID, typeUint64, "setresgid: requested saved gid (4294967295 means unchanged)."),
 
 	field(fieldFDName, typeString, "File path for open/execve, ip:port of the remote endpoint for connect/accept, local endpoint for bind/listen, or unix socket path."),
 	field(fieldFDNameRaw, typeString, "Path exactly as passed to the syscall, before fd_path resolution."),
@@ -178,6 +195,7 @@ var fieldDefs = []FieldDef{
 	field(fieldGvisorPoint, typeString, "gVisor trace point, e.g. syscall/connect/exit or sentry/execve."),
 	{Name: fieldGvisorANames, Type: typeString, IsList: true, Desc: "Names of all known ancestors, nearest first; use with intersects / in."},
 	field(fieldGvisorExitStatus, typeUint64, "Exit status for task_exit and exit_notify_parent points."),
+	field(fieldGvisorPrevUID, typeUint64, "setuid-family events: the effective uid the process had before the call. Absent if the process had not been seen before."),
 	field(fieldGvisorStdinPipeProc, typeString, "Name of the process writing to this process's stdin pipe at exec, e.g. curl in curl | sh (requires pipe_proc_info on sentry/execve)."),
 
 	field(fieldStatsConnections, typeUint64, "gvisor_stats: live sandbox connections."),

@@ -141,6 +141,62 @@
       ]
     },
     {
+      "name": "syscall/setuid/exit",
+      "context_fields": [
+        "time",
+        "container_id",
+        "thread_id",
+        "group_id",
+        "process_name",
+        "cwd",
+        "credentials",
+        "parent_thread_group_id",
+        "is_exec_session"
+      ]
+    },
+    {
+      "name": "syscall/setgid/exit",
+      "context_fields": [
+        "time",
+        "container_id",
+        "thread_id",
+        "group_id",
+        "process_name",
+        "cwd",
+        "credentials",
+        "parent_thread_group_id",
+        "is_exec_session"
+      ]
+    },
+    {
+      "name": "syscall/setresuid/exit",
+      "context_fields": [
+        "time",
+        "container_id",
+        "thread_id",
+        "group_id",
+        "process_name",
+        "cwd",
+        "credentials",
+        "parent_thread_group_id",
+        "is_exec_session"
+      ]
+    },
+    {
+      "name": "syscall/setresgid/exit",
+      "context_fields": [
+        "time",
+        "container_id",
+        "thread_id",
+        "group_id",
+        "process_name",
+        "cwd",
+        "credentials",
+        "parent_thread_group_id",
+        "is_exec_session"
+      ]
+    },
+    {
       "name": "syscall/openat/exit",
       "optional_fields": [
         "fd_path"

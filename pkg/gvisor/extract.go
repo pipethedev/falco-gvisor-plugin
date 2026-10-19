@@ -27,6 +27,14 @@ var pointExtractors = map[string]extractorFunc{
 	fieldEvtArgDomain:   extractArgDomain,
 	fieldEvtArgType:     extractArgType,
 	fieldEvtArgRequest:  extractArgRequest,
+	fieldEvtArgUID:      setid(syscallSetuid, func(m *pb.Setid) uint32 { return m.GetId() }),
+	fieldEvtArgGID:      setid(syscallSetgid, func(m *pb.Setid) uint32 { return m.GetId() }),
+	fieldEvtArgRUID:     setresid(syscallSetresuid, func(m *pb.Setresid) uint32 { return m.GetRid() }),
+	fieldEvtArgEUID:     setresid(syscallSetresuid, func(m *pb.Setresid) uint32 { return m.GetEid() }),
+	fieldEvtArgSUID:     setresid(syscallSetresuid, func(m *pb.Setresid) uint32 { return m.GetSid() }),
+	fieldEvtArgRGID:     setresid(syscallSetresgid, func(m *pb.Setresid) uint32 { return m.GetRid() }),
+	fieldEvtArgEGID:     setresid(syscallSetresgid, func(m *pb.Setresid) uint32 { return m.GetEid() }),
+	fieldEvtArgSGID:     setresid(syscallSetresgid, func(m *pb.Setresid) uint32 { return m.GetSid() }),
 
 	fieldFDName:      fdString(func(v fdView) string { return v.name }),
 	fieldFDNameRaw:   fdString(func(v fdView) string { return v.nameRaw }),
@@ -79,6 +87,7 @@ var pointExtractors = map[string]extractorFunc{
 	fieldGvisorPoint:         func(e *Event, _ FieldRequest) (any, bool) { return e.Point.PointName(), true },
 	fieldGvisorANames:        extractANames,
 	fieldGvisorExitStatus:    extractExitStatus,
+	fieldGvisorPrevUID:       extractPrevUID,
 	fieldGvisorStdinPipeProc: procString(func(p ProcessInfo) string { return p.StdinPipeComm }),
 }
 
@@ -184,6 +193,40 @@ func extractArgRequest(e *Event, _ FieldRequest) (any, bool) {
 		return nil, false
 	}
 	return ptraceRequestString(pt.GetRequest()), true
+}
+
+const (
+	syscallSetuid    = "setuid"
+	syscallSetgid    = "setgid"
+	syscallSetresuid = "setresuid"
+	syscallSetresgid = "setresgid"
+)
+
+func setid(syscall string, get func(*pb.Setid) uint32) extractorFunc {
+	return func(e *Event, _ FieldRequest) (any, bool) {
+		m, ok := e.Point.Msg.(*pb.Setid)
+		if !ok || e.Point.EventType() != syscall {
+			return nil, false
+		}
+		return uint64(get(m)), true
+	}
+}
+
+func setresid(syscall string, get func(*pb.Setresid) uint32) extractorFunc {
+	return func(e *Event, _ FieldRequest) (any, bool) {
+		m, ok := e.Point.Msg.(*pb.Setresid)
+		if !ok || e.Point.EventType() != syscall {
+			return nil, false
+		}
+		return uint64(get(m)), true
+	}
+}
+
+func extractPrevUID(e *Event, _ FieldRequest) (any, bool) {
+	if e.Context.PrevUID == nil {
+		return nil, false
+	}
+	return uint64(*e.Context.PrevUID), true
 }
 
 func fdString(get func(fdView) string) extractorFunc {

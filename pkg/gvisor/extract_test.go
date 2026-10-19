@@ -192,6 +192,34 @@ func TestExtractSocketAndPtrace(t *testing.T) {
 	}
 }
 
+func TestExtractSetuid(t *testing.T) {
+	ctx := testContext(42, 1, "curl")
+	ctx.Credentials = &pb.Credentials{}
+	evt := eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SETID, &pb.Setid{ContextData: ctx, Sysno: sysnoOf(t, "setuid"), Exit: &pb.Exit{}, Id: 0})
+	want := map[string]any{
+		fieldEvtType:       "setuid",
+		fieldEvtArgUID:     uint64(0),
+		fieldGvisorPrevUID: uint64(1000),
+		fieldUserUID:       uint64(0),
+		fieldEvtArgGID:     nil,
+	}
+	for name, v := range want {
+		if got := get(t, evt, name); !reflect.DeepEqual(got, v) {
+			t.Errorf("%s = %#v, want %#v", name, got, v)
+		}
+	}
+
+	evt = eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SETRESID, &pb.Setresid{ContextData: testContext(42, 1, "curl"), Sysno: sysnoOf(t, "setresuid"), Exit: &pb.Exit{}, Rid: 4294967295, Eid: 0, Sid: 4294967295})
+	if get(t, evt, fieldEvtArgEUID) != uint64(0) || get(t, evt, fieldEvtArgRUID) != uint64(4294967295) || get(t, evt, fieldEvtArgEGID) != nil {
+		t.Errorf("setresuid args: euid=%v ruid=%v egid=%v", get(t, evt, fieldEvtArgEUID), get(t, evt, fieldEvtArgRUID), get(t, evt, fieldEvtArgEGID))
+	}
+
+	fresh := eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SETID, &pb.Setid{ContextData: testContext(77, 1, "new"), Sysno: sysnoOf(t, "setuid"), Exit: &pb.Exit{}})
+	if get(t, fresh, fieldGvisorPrevUID) != nil {
+		t.Error("prev_uid must be absent for a process seen for the first time")
+	}
+}
+
 func TestExtractExecAndContainer(t *testing.T) {
 	evt := eventFor(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
 		ContextData:          testContext(43, 42, "x"),
@@ -333,6 +361,10 @@ func TestEveryFieldHasExtractorAndType(t *testing.T) {
 		eventFor(t, pb.MessageType_MESSAGE_SYSCALL_PTRACE, &pb.Ptrace{ContextData: testContext(42, 1, "c"), Exit: &pb.Exit{}}),
 		eventFor(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{ContextData: testContext(42, 1, "c"), BinaryPath: "/x", BinarySha256: []byte{1}, Stdin: &pb.FdInfo{Mode: linux.S_IFIFO}, Stdout: &pb.FdInfo{Mode: linux.S_IFIFO}, Stderr: &pb.FdInfo{Mode: linux.S_IFIFO}, PipeInputProc: &pb.PipeProcInfo{ContextData: &pb.ContextData{ProcessName: "wget"}}}),
 		eventFor(t, pb.MessageType_MESSAGE_SENTRY_TASK_EXIT, &pb.TaskExit{ContextData: testContext(42, 1, "c")}),
+		eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SETID, &pb.Setid{ContextData: testContext(42, 1, "c"), Sysno: sysnoOf(t, "setuid"), Exit: &pb.Exit{}}),
+		eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SETID, &pb.Setid{ContextData: testContext(42, 1, "c"), Sysno: sysnoOf(t, "setgid"), Exit: &pb.Exit{}}),
+		eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SETRESID, &pb.Setresid{ContextData: testContext(42, 1, "c"), Sysno: sysnoOf(t, "setresuid"), Exit: &pb.Exit{}}),
+		eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SETRESID, &pb.Setresid{ContextData: testContext(42, 1, "c"), Sysno: sysnoOf(t, "setresgid"), Exit: &pb.Exit{}}),
 	}
 	statsData, err := EncodeStats(StatsSnapshot{})
 	if err != nil {

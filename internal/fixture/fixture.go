@@ -33,6 +33,8 @@ const (
 	pointOpenat    = "syscall/openat"
 	pointSocket    = "syscall/socket"
 	pointPtrace    = "syscall/ptrace"
+	pointSetuid    = "syscall/setuid"
+	pointSetresuid = "syscall/setresuid"
 	unixAddrPrefix = "unix:"
 	flagSeparator  = "|"
 	baseTimeNs     = 1_700_000_000_000_000_000
@@ -124,6 +126,10 @@ type Event struct {
 	Type    string `json:"type"`
 	Request string `json:"request"`
 	Errno   int64  `json:"errno"`
+	ID      uint32 `json:"id"`
+	RID     uint32 `json:"rid"`
+	EID     uint32 `json:"eid"`
+	SID     uint32 `json:"sid"`
 }
 
 // Load reads a fixture file. The container id is derived from the file
@@ -221,6 +227,14 @@ func (e Event) message(containerID string, timeNs int64) (pb.MessageType, proto.
 		}
 		return syscallMsg(pb.MessageType_MESSAGE_SYSCALL_PTRACE, "ptrace", func(nr uint64) proto.Message {
 			return &pb.Ptrace{ContextData: ctx, Exit: exit, Sysno: nr, Request: req}
+		})
+	case pointSetuid:
+		return syscallMsg(pb.MessageType_MESSAGE_SYSCALL_SETID, "setuid", func(nr uint64) proto.Message {
+			return &pb.Setid{ContextData: ctx, Exit: exit, Sysno: nr, Id: e.ID}
+		})
+	case pointSetresuid:
+		return syscallMsg(pb.MessageType_MESSAGE_SYSCALL_SETRESID, "setresuid", func(nr uint64) proto.Message {
+			return &pb.Setresid{ContextData: ctx, Exit: exit, Sysno: nr, Rid: e.RID, Eid: e.EID, Sid: e.SID}
 		})
 	default:
 		return 0, nil, fmt.Errorf("%w: %q", errUnknownPoint, e.Point)
