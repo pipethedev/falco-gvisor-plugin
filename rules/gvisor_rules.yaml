@@ -533,8 +533,11 @@
   desc: >
     A process that was not running as root asked to switch to uid 0 with setuid or setresuid.
     Succeeds only with capabilities a non-root workload should not have; failures are attempts.
+    For a process first seen at this call (running before the plugin attached), only a failed
+    attempt can be recognised: its uid after the call is still non-root.
   condition: >
-    evt.type in (setuid, setresuid) and gvisor.prev_uid != 0
+    evt.type in (setuid, setresuid)
+    and (gvisor.prev_uid != 0 or (not gvisor.prev_uid exists and user.uid != 0))
     and ((evt.type = setuid and evt.arg.uid = 0)
          or (evt.type = setresuid and (evt.arg.ruid = 0 or evt.arg.euid = 0 or evt.arg.suid = 0)))
     and not gvisor_privilege_change_allowlist

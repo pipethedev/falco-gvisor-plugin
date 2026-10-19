@@ -1,0 +1,17 @@
+{
+  "description": "A process running before the plugin attached, so first seen at this call, tries setuid(0) as uid 1000 and fails with EPERM.",
+  "expect": [
+    "gVisor Privilege Escalation via setuid"
+  ],
+  "events": [
+    {
+      "point": "syscall/setuid",
+      "pid": 7,
+      "ppid": 1,
+      "comm": "helper",
+      "uid": 1000,
+      "id": 0,
+      "errno": 1
+    }
+  ]
+}

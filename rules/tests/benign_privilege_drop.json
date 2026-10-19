@@ -1,5 +1,5 @@
 {
-  "description": "Root daemons dropping privileges and non-root processes keeping their uid.",
+  "description": "Root daemons dropping privileges, non-root processes keeping their uid, and an already-running root process calling setuid(0).",
   "expect": [],
   "events": [
     {
@@ -53,6 +53,14 @@
       "rid": 1000,
       "eid": 1000,
       "sid": 1000
+    },
+    {
+      "point": "syscall/setuid",
+      "pid": 9,
+      "ppid": 1,
+      "comm": "daemon",
+      "uid": 0,
+      "id": 0
     }
   ]
 }
