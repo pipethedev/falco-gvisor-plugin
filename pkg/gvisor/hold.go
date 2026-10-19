@@ -10,8 +10,11 @@ const (
 	holdPollInterval = 10 * time.Millisecond
 )
 
+// heldEvent keeps what emitting an event needs, not the decoded point, so
+// its memory is the raw payload plus the process snapshot.
 type heldEvent struct {
-	point       Point
+	raw         []byte
+	at          time.Time
 	ctx         EventContext
 	containerID string
 }
@@ -35,21 +38,22 @@ func (s *Server) handlePoint(sc *sandboxConn, table *ProcessTable, point Point) 
 	containerID := pointContainerID(point)
 	isNew := containerID != "" && sc.addContainer(containerID)
 	pending := isNew && s.metadataWait > 0 && s.resolver.Lookup(containerID) == nil
-	if (sc.hold.active() || pending) && s.holdEvent(sc, heldEvent{point: point, ctx: ctx, containerID: containerID}, pending) {
+	if (sc.hold.active() || pending) && s.holdEvent(sc, heldEvent{raw: point.Raw, at: pointTime(point), ctx: ctx, containerID: containerID}, pending) {
 		return
 	}
 	if containerID != "" {
 		ctx.Container = s.resolver.Lookup(containerID)
 	}
-	s.emitEvent(sc, ctx, point)
+	s.emitEvent(sc, ctx, point.Raw, pointTime(point))
 }
 
 // holdEvent adds an event to the connection's hold and reports whether it
-// did. The payloads held by all connections together are limited to
-// maxHeldBytes; when an event does not fit, the hold is flushed and the
-// event is left to be emitted directly, after the events held before it.
+// did. The events held by all connections together, payloads and process
+// snapshots, are limited to maxHeldBytes; when an event does not fit, the
+// hold is flushed and the event is left to be emitted directly, after the
+// events held before it.
 func (s *Server) holdEvent(sc *sandboxConn, held heldEvent, pending bool) bool {
-	size := int64(len(held.point.Raw))
+	size := held.bytes()
 	if !s.reserveHeld(size) {
 		s.flushHold(sc)
 		return false
@@ -60,14 +64,23 @@ func (s *Server) holdEvent(sc *sandboxConn, held heldEvent, pending bool) bool {
 	if pending {
 		sc.hold.waitingFor = append(sc.hold.waitingFor, held.containerID)
 	}
-	held.point.Raw = bytes.Clone(held.point.Raw)
-	held.point.header = nil
+	held.raw = bytes.Clone(held.raw)
 	sc.hold.events = append(sc.hold.events, held)
 	sc.hold.bytes += size
 	if len(sc.hold.events) >= maxHeldEvents {
 		s.flushHold(sc)
 	}
 	return true
+}
+
+// bytes estimates the memory a held event keeps: its payload and the rows
+// of its snapshot, whose argv may outlive the table's.
+func (h heldEvent) bytes() int64 {
+	size := int64(len(h.raw)) + h.ctx.Process.rowBytes()
+	for i := range h.ctx.Ancestors {
+		size += h.ctx.Ancestors[i].rowBytes()
+	}
+	return size
 }
 
 func (s *Server) reserveHeld(size int64) bool {
@@ -102,7 +115,7 @@ func (s *Server) flushHold(sc *sandboxConn) {
 		if held.containerID != "" {
 			held.ctx.Container = s.resolver.Lookup(held.containerID)
 		}
-		s.emitEvent(sc, held.ctx, held.point)
+		s.emitEvent(sc, held.ctx, held.raw, held.at)
 	}
 }
 

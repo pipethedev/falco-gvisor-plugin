@@ -322,13 +322,13 @@ func (s *Server) countDecodeError(err error) {
 	s.stats.DropDecodeError.Add(1)
 }
 
-func (s *Server) emitEvent(sc *sandboxConn, ctx EventContext, point Point) {
-	data, err := EncodeEvent(ctx, point.Raw)
+func (s *Server) emitEvent(sc *sandboxConn, ctx EventContext, raw []byte, at time.Time) {
+	data, err := EncodeEvent(ctx, raw)
 	if err != nil {
 		s.stats.DropContextSize.Add(1)
 		return
 	}
-	if err := s.emit(sc.id, data, pointTime(point)); err != nil {
+	if err := s.emit(sc.id, data, at); err != nil {
 		if errors.Is(err, ErrSourceClosed) {
 			return
 		}

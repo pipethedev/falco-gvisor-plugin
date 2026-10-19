@@ -542,3 +542,17 @@ func TestServerHoldWaitsForEveryNewContainer(t *testing.T) {
 		}
 	}
 }
+
+func TestHeldEventBytesCountSnapshot(t *testing.T) {
+	long := strings.Repeat("a", maxArgvBytes)
+	held := heldEvent{
+		raw: make([]byte, 10),
+		ctx: EventContext{Snapshot: Snapshot{
+			Process:   ProcessInfo{Argv: []string{long}},
+			Ancestors: []ProcessInfo{{Argv: []string{long}}, {}},
+		}},
+	}
+	if size, want := held.bytes(), int64(10+2*maxArgvBytes+3*rowOverheadBytes); size < want {
+		t.Errorf("held event counted as %d bytes, holds at least %d", size, want)
+	}
+}
