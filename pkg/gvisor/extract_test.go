@@ -528,3 +528,24 @@ func TestDescribe(t *testing.T) {
 		t.Errorf("Describe = %q, want %q", got, want)
 	}
 }
+
+func TestExtractCreatOnAMD64(t *testing.T) {
+	const amd64Creat = 85
+	table := NewProcessTable(defaultMaxTrackedProcess)
+	table.Apply(execPoint(t, 7, 1, "/bin/sh", "sh"))
+	p := mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_OPEN, &pb.Open{
+		ContextData: testContext(7, 1, "sh"), Exit: &pb.Exit{Result: 3}, Sysno: amd64Creat,
+		Fd: linux.AT_FDCWD, Pathname: "/etc/cron.d/job", Flags: linux.O_WRONLY | linux.O_CREAT | linux.O_TRUNC,
+	})
+	data, err := EncodeEvent(EventContext{Snapshot: table.Apply(p), Arch: "amd64"}, p.Raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evt, err := DecodeEvent(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if typ, name, write := get(t, &evt, fieldEvtType), get(t, &evt, fieldFDName), get(t, &evt, fieldEvtIsOpenWrite); typ != "creat" || name != "/etc/cron.d/job" || write != true {
+		t.Errorf("creat: evt.type=%v fd.name=%v is_open_write=%v", typ, name, write)
+	}
+}

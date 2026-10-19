@@ -242,6 +242,21 @@
           "parent_thread_group_id",
           "is_exec_session"
         ]
+      },
+      {
+        "name": "syscall/creat/exit",
+        "context_fields": [
+          "time",
+          "container_id",
+          "thread_id",
+          "group_id",
+          "thread_group_start_time",
+          "process_name",
+          "cwd",
+          "credentials",
+          "parent_thread_group_id",
+          "is_exec_session"
+        ]
       }
     ],
     "sinks": [
