@@ -43,7 +43,7 @@ Environment variables are never requested. If a custom session asks for them, th
 
 | Key | Default | Meaning |
 |---|---|---|
-| `captureArgs` | `true` | Forward process arguments. With `false` only `argv[0]` is kept, and the rules that match on arguments (miner arguments, reverse shells, `curl \| sh`) can no longer fire. |
+| `captureArgs` | `true` | Forward process arguments. Arguments can contain secrets (passwords or tokens passed on the command line), and alerts copy them into Falco's outputs through `proc.cmdline`, so treat those outputs as sensitive or turn this off. With `false` only `argv[0]` is kept, and the rules that match on arguments (miner arguments, reverse shells, `curl \| sh`) can no longer fire. |
 | `maxEventSize` | `1048576` (1 MiB) | Largest message accepted from gVisor. Larger ones are dropped, logged and counted (`drops_truncated`). gVisor itself can't send messages larger than its socket send buffer (about 208 KiB by default); those are counted as `drops_sandbox`. |
 | `maxQueueBytes` | `67108864` (64 MiB) | Memory for events waiting for Falco. Each sandbox gets an equal share; beyond it, its events are dropped and counted (`drops_queue_share`, `drops_channel_full`). |
 | `maxTrackedProcesses` | `4096` | Processes remembered per sandbox. Whatever this is set to, a sandbox's process table is also limited to about 16 MiB, and once all sandboxes' tables together pass 256 MiB, each table above 1 MiB drops its least recently used processes. |

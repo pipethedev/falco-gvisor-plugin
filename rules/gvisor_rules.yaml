@@ -637,40 +637,39 @@
 # Plugin health
 # ---------------------------------------------------------------------------
 
-- rule: gVisor Sandboxes Not Monitored
-  desc: >
-    The plugin could not list gVisor sandboxes, or failed to attach a trace session to running
-    ones, so some sandboxes are not monitored. gVisor sinks never reconnect, so this follows a
-    Falco restart or rules/config reload when runsc or its state root is not reachable.
-    Reported on every gvisor_stats event while it persists.
+# Sandboxes the plugin cannot monitor: it could not list them, failed to
+# attach a trace session to running ones, or refused their connections.
+# gVisor sinks never reconnect, so this follows a Falco restart or rules or
+# config reload when runsc or its state root is not reachable.
+- macro: gvisor_sandboxes_unmonitored
   condition: >
-    evt.type = gvisor_stats
-    and (gvisor.stats.attacher_failed = true or gvisor.stats.unmonitored_sandboxes > 0
-         or gvisor.stats.connections_rejected_interval > 0)
-  output: >
-    gVisor sandboxes are not monitored (unmonitored=%gvisor.stats.unmonitored_sandboxes
-    attacher_failed=%gvisor.stats.attacher_failed refused_connections=%gvisor.stats.connections_rejected_interval
-    connections=%gvisor.stats.connections
-    attach_failures=%gvisor.stats.attach_failures)
-  priority: WARNING
-  source: gvisor
-  tags: [gvisor, plugin_health]
+    (gvisor.stats.attacher_failed = true or gvisor.stats.unmonitored_sandboxes > 0
+     or gvisor.stats.connections_rejected_interval > 0)
 
 # How many drops per stats interval are worth an alert. Override it on
 # busy hosts, for example with (gvisor.stats.drops_interval > 1000).
 - macro: gvisor_drops_worth_alerting
   condition: (gvisor.stats.drops_interval > 0)
 
-- rule: gVisor Monitoring Dropping Events
+# One rule covers every health problem: both kinds match the same
+# gvisor_stats event, and with Falco's default rule_matching (first) a
+# second rule would never fire while the first one does.
+- rule: gVisor Monitoring Degraded
   desc: >
-    The gvisor plugin dropped trace points since the previous stats event (oversized messages,
-    a full queue, sandbox-side write failures, decode errors). Each drop is a monitoring gap.
-  condition: evt.type = gvisor_stats and gvisor_drops_worth_alerting
+    Some sandboxes are not monitored (the attacher failed, sandboxes could not be attached,
+    connections were refused), or the plugin dropped trace points since the previous stats
+    event (oversized messages, a full queue, sandbox-side write failures, decode errors).
+    Either is a monitoring gap. Reported on every gvisor_stats event while it persists.
+  condition: >
+    evt.type = gvisor_stats and (gvisor_sandboxes_unmonitored or gvisor_drops_worth_alerting)
   output: >
-    gVisor monitoring dropped events (since_last=%gvisor.stats.drops_interval total=%gvisor.stats.drops
-    queue_full=%gvisor.stats.drops_channel_full queue_share=%gvisor.stats.drops_queue_share
-    sandbox=%gvisor.stats.drops_sandbox truncated=%gvisor.stats.drops_truncated
-    decode=%gvisor.stats.drops_decode_error connections=%gvisor.stats.connections)
-  priority: NOTICE
+    gVisor monitoring degraded (unmonitored=%gvisor.stats.unmonitored_sandboxes
+    attacher_failed=%gvisor.stats.attacher_failed refused_connections=%gvisor.stats.connections_rejected_interval
+    attach_failures=%gvisor.stats.attach_failures drops_since_last=%gvisor.stats.drops_interval
+    drops_total=%gvisor.stats.drops queue_full=%gvisor.stats.drops_channel_full
+    queue_share=%gvisor.stats.drops_queue_share sandbox=%gvisor.stats.drops_sandbox
+    truncated=%gvisor.stats.drops_truncated decode=%gvisor.stats.drops_decode_error
+    connections=%gvisor.stats.connections)
+  priority: WARNING
   source: gvisor
   tags: [gvisor, plugin_health]

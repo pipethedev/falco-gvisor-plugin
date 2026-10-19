@@ -100,8 +100,8 @@ write_config "${WORK}/defaults.yaml" ""
 run_pass "${WORK}/defaults.yaml" tests/defaults
 
 # Health: with runsc unreachable, the attacher must report the sandboxes it
-# cannot monitor through the default-enabled health rule.
-docker rm -f "${NAME}" >/dev/null
+# cannot monitor, and an event larger than maxEventSize must be reported as a
+# drop, through the default-enabled health rule.
 cat > "${WORK}/health.yaml" <<'EOF'
 plugins:
   - name: gvisor
@@ -112,6 +112,7 @@ plugins:
       attachOnOpen: true
       attachIntervalSeconds: 0
       statsIntervalSeconds: 1
+      maxEventSize: 1024
 load_plugins: [gvisor]
 rules_files:
   - /rules/gvisor_rules.yaml
@@ -119,18 +120,24 @@ json_output: true
 stdout_output:
   enabled: true
 EOF
-docker run -d --name "${NAME}" \
-  -v "${PLUGIN_DIR}:/plugin:ro" \
-  -v "${ROOT}/rules:/rules:ro" \
-  -e HOST_ROOT=/ \
-  -v "${WORK}/health.yaml:/etc/falco/falco.yaml:ro" \
-  "${FALCO_IMAGE}" falco -c /etc/falco/falco.yaml --disable-source=syscall >/dev/null
-for _ in $(seq "${STARTUP_TIMEOUT}"); do
-  if docker logs "${NAME}" 2>/dev/null | grep '"rule":"gVisor Sandboxes Not Monitored"' >/dev/null; then
-    echo "PASS health_attacher_unreachable"
-    exit 0
+start_falco "${WORK}/health.yaml"
+docker exec "${NAME}" /plugin/replay send -socket /run/falco/gvisor.sock /rules/tests/health/oversize_event.json
+# Each check is one gVisor Monitoring Degraded alert showing the problem.
+failed=0
+for want in 'attacher_failed=true' 'drops_since_last=[1-9]'; do
+  found=0
+  for _ in $(seq "${STARTUP_TIMEOUT}"); do
+    if docker logs "${NAME}" 2>/dev/null | grep '"rule":"gVisor Monitoring Degraded"' | grep "${want}" >/dev/null; then
+      found=1
+      break
+    fi
+    sleep 1
+  done
+  if [[ "${found}" == 1 ]]; then
+    echo "PASS health: ${want}"
+  else
+    echo "FAIL health: no gVisor Monitoring Degraded alert with ${want}" >&2
+    failed=1
   fi
-  sleep 1
 done
-echo "FAIL health_attacher_unreachable: no 'gVisor Sandboxes Not Monitored' alert" >&2
-exit 1
+exit "${failed}"

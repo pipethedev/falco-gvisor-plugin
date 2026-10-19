@@ -28,11 +28,11 @@ The shipped rules ([`rules/gvisor_rules.yaml`](rules/gvisor_rules.yaml)) cover:
 
 Four rules that need tuning for each environment ship disabled: shells in `kubectl exec` sessions, unexpected outbound connections, cloud metadata access, and service account token reads. Every rule has an allowlist macro you can override. See the [runbook](docs/runbook.md#tuning-rules).
 
-The plugin also reports on its own health and alerts if sandboxes go unmonitored or events are being dropped.
+The plugin also reports on its own health: the **gVisor Monitoring Degraded** rule alerts if sandboxes go unmonitored or events are being dropped.
 
 ## Requirements
 
-- Falco 0.45 or later
+- Falco 0.45 or later (the rules need Falco's rules engine 0.65.0, which is what 0.45.0 ships)
 - gVisor (`runsc`) from 2023 or later
 - Linux, amd64 or arm64
 

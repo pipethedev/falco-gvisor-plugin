@@ -84,14 +84,14 @@ New containers are monitored at creation. Existing ones are attached by the plug
 | File rules never fire | They need the full profile (`pod-init-full.json`, `gvisor-session-full.json`). On the lean profile, disable them by their tag, `gvisor_full_profile` (see [Tuning rules](#tuning-rules)). |
 | Only one alert for an event matching two rules | Falco's default `rule_matching: first`. Set `rule_matching: all` to get every match. |
 
-The `gVisor Monitoring Dropping Events` rule alerts on any stats interval with drops. On busy hosts, raise the threshold by overriding `gvisor_drops_worth_alerting` (see [Tuning rules](#tuning-rules)).
+The `gVisor Monitoring Degraded` rule alerts on any stats interval with drops. On busy hosts, raise the threshold by overriding `gvisor_drops_worth_alerting` (see [Tuning rules](#tuning-rules)).
 
 ## Restarts and reloads
 
 gVisor sinks connect once, when a sandbox is created, and never reconnect. Whenever Falco closes the plugin, every sandbox connection is lost. That happens on a restart, on `SIGHUP`, and on any change to a watched config or rules file (`watch_config_files`, on by default). Coverage then depends on the attacher re-attaching each running sandbox with `runsc trace create`, immediately when `attachOnOpen` is set, otherwise within `attachIntervalSeconds`.
 
 - Points emitted between the reload and the re-attach are lost.
-- If runsc or its state root is unreachable from Falco, sandboxes stay unmonitored. The default-enabled rule **gVisor Sandboxes Not Monitored** fires on every `gvisor_stats` event while `gvisor.stats.attacher_failed` is true or `gvisor.stats.unmonitored_sandboxes` is above zero. Treat it as a monitoring outage.
+- If runsc or its state root is unreachable from Falco, sandboxes stay unmonitored. The default-enabled rule **gVisor Monitoring Degraded** fires on every `gvisor_stats` event while `gvisor.stats.attacher_failed` is true or `gvisor.stats.unmonitored_sandboxes` is above zero. Treat it as a monitoring outage. The same rule reports dropped events: it is one rule because Falco's default `rule_matching: first` would let one health rule hide another on the same stats event.
 - Disabling both `attachOnOpen` and periodic sweeps (`attachIntervalSeconds: 0`) means a single rules edit leaves every running sandbox unmonitored until it is recreated.
 
 ## Tuning rules
@@ -115,7 +115,7 @@ Other tuning hooks:
 - `gvisor_miner_sha256` and `gvisor_network_tool_sha256`: override with `(proc.sha256 in (...))` to catch renamed tool binaries by hash.
 - `gvisor_expected_outbound_ports` / `gvisor_expected_outbound`: define normal egress before enabling **gVisor Unexpected Outbound Connection**.
 - `gvisor_sensitive_file_readers`: tools allowed to read their own credential files.
-- `gvisor_drops_worth_alerting`: when **gVisor Monitoring Dropping Events** alerts, `(gvisor.stats.drops_interval > 0)` by default.
+- `gvisor_drops_worth_alerting`: how many drops make **gVisor Monitoring Degraded** alert, `(gvisor.stats.drops_interval > 0)` by default.
 - Enable rules that are off by default from `falco.yaml`, or disable the file rules on the lean profile, where they never fire:
 
   ```yaml
