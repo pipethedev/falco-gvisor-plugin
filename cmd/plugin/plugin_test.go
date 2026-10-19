@@ -1,60 +1,57 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
-	"os/exec"
-	"path/filepath"
 	"testing"
 
-	"github.com/falcosecurity/plugin-sdk-go/pkg/loader"
+	"github.com/falcosecurity/plugins/plugins/gvisor/pkg/gvisor"
 )
 
-func buildPlugin(t *testing.T) string {
-	t.Helper()
-	if testing.Short() {
-		t.Skip("builds the shared library")
-	}
-	out := filepath.Join(t.TempDir(), "libgvisor.so")
-	cmd := exec.CommandContext(t.Context(), "go", "build", "-buildmode=c-shared", "-o", out, ".")
-	if msg, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("build plugin: %v\n%s", err, msg)
-	}
-	return out
-}
+// Loading libgvisor.so into a Go test binary would put two Go runtimes in
+// one process, which Go does not support and which hangs intermittently.
+// These tests exercise the plugin methods directly; loading the built
+// library is covered by running it in Falco (make rules-test, make
+// test-gvisor).
 
-func TestPluginLoads(t *testing.T) {
-	p, err := loader.NewValidPlugin(buildPlugin(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(p.Unload)
-
-	info := p.Info()
+func TestPluginInfo(t *testing.T) {
+	info := (&gvisorPlugin{}).Info()
 	if info.Name != pluginName || info.EventSource != pluginSource || info.ID != pluginID || info.RequiredAPIVersion != requiredAPIVersion {
 		t.Errorf("unexpected info %+v", info)
 	}
-	if !p.HasCapSourcing() || !p.HasCapExtraction() {
-		t.Error("plugin must provide sourcing and extraction")
+	if len(info.ExtractEventSources) != 1 || info.ExtractEventSources[0] != pluginSource {
+		t.Errorf("extract event sources = %v, want only %q", info.ExtractEventSources, pluginSource)
 	}
-	if p.InitSchema() == nil || p.InitSchema().Schema == "" {
-		t.Error("missing init schema")
-	}
-	if len(p.Fields()) == 0 {
-		t.Error("no fields exported")
+}
+
+func TestPluginInitSchemaAndConfig(t *testing.T) {
+	p := &gvisorPlugin{}
+	var schema map[string]any
+	if err := json.Unmarshal([]byte(p.InitSchema().Schema), &schema); err != nil {
+		t.Fatalf("init schema is not JSON: %v", err)
 	}
 	if err := p.Init(`{"metadataProvider":"none","attachOnOpen":false}`); err != nil {
 		t.Errorf("init with valid config: %v", err)
 	}
-}
-
-func TestPluginRejectsBadConfig(t *testing.T) {
-	p, err := loader.NewValidPlugin(buildPlugin(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(p.Unload)
 	if err := p.Init(`{"unknownKey":true}`); err == nil {
 		t.Error("init accepted an unknown key")
+	}
+}
+
+func TestPluginFieldsMirrorDefinitions(t *testing.T) {
+	entries := (&gvisorPlugin{}).Fields()
+	defs := gvisor.Fields()
+	if len(entries) != len(defs) {
+		t.Fatalf("%d SDK fields for %d definitions", len(entries), len(defs))
+	}
+	for i, d := range defs {
+		e := entries[i]
+		if e.Name != d.Name || e.Type != d.Type || e.IsList != d.IsList || e.Desc != d.Desc {
+			t.Errorf("field %s not mirrored: %+v", d.Name, e)
+		}
+		if e.Arg.IsIndex != (d.Arg == gvisor.ArgIndex) || e.Arg.IsKey != (d.Arg == gvisor.ArgKey) || e.Arg.IsRequired != (d.Arg != gvisor.ArgNone) {
+			t.Errorf("field %s argument spec %+v does not match %v", d.Name, e.Arg, d.Arg)
+		}
 	}
 }
 
@@ -66,5 +63,15 @@ func TestValidateOpenParams(t *testing.T) {
 	}
 	if err := validateOpenParams("socket=/tmp/x"); !errors.Is(err, errOpenParams) {
 		t.Errorf("non-empty open params accepted: %v", err)
+	}
+}
+
+func TestRecoverInto(t *testing.T) {
+	run := func() (err error) {
+		defer recoverInto(&err, "test")
+		panic("boom")
+	}
+	if err := run(); err == nil {
+		t.Error("panic not converted into an error")
 	}
 }
