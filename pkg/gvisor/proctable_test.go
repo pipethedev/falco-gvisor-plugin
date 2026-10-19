@@ -72,7 +72,7 @@ func TestProcessTableLifecycle(t *testing.T) {
 		t.Error("non-leader thread exit removed the process")
 	}
 	exitSnap := table.Apply(exitPoint(t, 2, 2))
-	if exitSnap.Process.Comm != "xmrig" {
+	if exitSnap.Process.ExePath != "/tmp/xmrig" {
 		t.Error("exit snapshot lost process state")
 	}
 	if _, ok := table.lookup(2); ok {
@@ -197,6 +197,63 @@ func TestTTYEncoding(t *testing.T) {
 		if got := ttyOf(&pb.FdInfo{Path: path}); got != want {
 			t.Errorf("ttyOf(%s) = %d, want %d", path, got, want)
 		}
+	}
+}
+
+func startedContext(pid, ppid int32, comm string, start int64) *pb.ContextData {
+	ctx := testContext(pid, ppid, comm)
+	ctx.ThreadGroupStartTimeNs = start
+	return ctx
+}
+
+func TestProcessTablePidReuseReplacesRow(t *testing.T) {
+	table := NewProcessTable(defaultMaxTrackedProcess)
+	table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
+		ContextData: startedContext(5, 1, "old", 100), BinaryPath: "/bin/old", Argv: []string{"old", "-x"}, BinaryMode: 0o755,
+	}))
+	snap := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{
+		ContextData: startedContext(5, 1, "new", 200), Exit: &pb.Exit{},
+	}))
+	if p := snap.Process; p.ExePath != "" || len(p.Argv) != 0 || p.Comm != "new" || p.StartTimeNs != 200 {
+		t.Errorf("a reused pid kept the previous process: %+v", p)
+	}
+}
+
+func TestProcessTableSyscallExec(t *testing.T) {
+	table := NewProcessTable(defaultMaxTrackedProcess)
+	table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
+		ContextData: testContext(6, 1, "sh"), BinaryPath: "/usr/bin/busybox", Execfn: "/bin/cat", Argv: []string{"cat"},
+		BinaryMode: 0o755, BinaryOverlayfsLower: true,
+	}))
+	same := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_EXECVE, &pb.Execve{
+		ContextData: testContext(6, 1, "cat"), Exit: &pb.Exit{}, Fd: linux.AT_FDCWD, Pathname: "/bin/cat", Argv: []string{"cat"},
+	}))
+	if p := same.Process; p.ExePath != "/usr/bin/busybox" || !p.LowerLayer || !p.HasBinaryInfo {
+		t.Errorf("the syscall exit of an exec already reported by sentry/execve discarded its details: %+v", p)
+	}
+
+	missed := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_EXECVE, &pb.Execve{
+		ContextData: testContext(6, 1, "update"), Exit: &pb.Exit{}, Fd: linux.AT_FDCWD, Pathname: "update", Argv: []string{"./update", "-q"},
+	}))
+	p := missed.Process
+	if p.ExePath != "/app/update" || p.Comm != "update" || p.Args() != "-q" || p.HasBinaryInfo || p.LowerLayer {
+		t.Errorf("an exec whose sentry point was dropped must show the new program with unknown binary details: %+v", p)
+	}
+
+	failed := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_EXECVE, &pb.Execve{
+		ContextData: testContext(6, 1, "update"), Exit: &pb.Exit{Errorno: 2}, Fd: linux.AT_FDCWD, Pathname: "/nope",
+	}))
+	if failed.Process.ExePath != "/app/update" {
+		t.Error("a failed execve changed the process")
+	}
+}
+
+func TestProcessTableRefreshesComm(t *testing.T) {
+	table := NewProcessTable(defaultMaxTrackedProcess)
+	table.Apply(execPoint(t, 7, 1, "/usr/bin/python3", "python3"))
+	snap := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{ContextData: testContext(7, 1, "worker-1"), Exit: &pb.Exit{}}))
+	if snap.Process.Comm != "worker-1" {
+		t.Errorf("comm not refreshed from context after a rename: %q", snap.Process.Comm)
 	}
 }
 

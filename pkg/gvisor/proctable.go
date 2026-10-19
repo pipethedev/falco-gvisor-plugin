@@ -49,6 +49,9 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 		return Snapshot{}
 	}
 	proc := t.upsert(ctx.GetThreadGroupId())
+	if start := ctx.GetThreadGroupStartTimeNs(); start != 0 && proc.StartTimeNs != 0 && start != proc.StartTimeNs {
+		*proc = ProcessInfo{Pid: proc.Pid}
+	}
 	var prevUID *uint32
 	if isCredentialChange(p.Msg) && proc.HasCreds {
 		uid := proc.UID
@@ -61,6 +64,10 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 		proc.applyStart(m)
 	case *pb.ExecveInfo:
 		proc.applyExec(m)
+	case *pb.Execve:
+		if exit := m.GetExit(); exit != nil && exit.GetErrorno() == 0 {
+			proc.applySyscallExec(m)
+		}
 	case *pb.CloneInfo:
 		t.applyClone(proc, m)
 	}

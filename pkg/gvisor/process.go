@@ -40,6 +40,7 @@ type ProcessInfo struct {
 	Pid           int32    `json:"pid"`
 	Ppid          int32    `json:"ppid"`
 	ExePath       string   `json:"exepath,omitempty"`
+	InvokedPath   string   `json:"invoked,omitempty"`
 	Argv          []string `json:"argv,omitempty"`
 	Cwd           string   `json:"cwd,omitempty"`
 	Comm          string   `json:"comm,omitempty"`
@@ -51,6 +52,7 @@ type ProcessInfo struct {
 	SHA256        string   `json:"sha256,omitempty"`
 	UpperLayer    bool     `json:"upper,omitempty"`
 	LowerLayer    bool     `json:"lower,omitempty"`
+	HasBinaryInfo bool     `json:"binfo,omitempty"`
 	FromMemfd     bool     `json:"memfd,omitempty"`
 	StdinType     string   `json:"stdin,omitempty"`
 	StdoutType    string   `json:"stdout,omitempty"`
@@ -91,7 +93,7 @@ func (p *ProcessInfo) applyContext(ctx *pb.ContextData) {
 	if cwd := ctx.GetCwd(); cwd != "" {
 		p.Cwd = cwd
 	}
-	if comm := ctx.GetProcessName(); comm != "" && p.Comm == "" {
+	if comm := ctx.GetProcessName(); comm != "" {
 		p.Comm = truncateComm(comm)
 	}
 	if creds := ctx.GetCredentials(); creds != nil {
@@ -109,8 +111,10 @@ func (p *ProcessInfo) applyContext(ctx *pb.ContextData) {
 
 func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
 	p.ExePath = info.GetBinaryPath()
+	p.InvokedPath = resolvePath(invokedPath(info), linux.AT_FDCWD, "", p.Cwd)
 	p.Argv = budgetArgv(info.GetArgv(), maxArgvBytes)
 	p.Comm = truncateComm(path.Base(invokedPath(info)))
+	p.HasBinaryInfo = info.GetBinaryMode() != 0
 	p.SHA256 = hex.EncodeToString(info.GetBinarySha256())
 	p.UpperLayer = info.GetBinaryOverlayfsUpper()
 	p.LowerLayer = info.GetBinaryOverlayfsLower()
@@ -120,6 +124,32 @@ func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
 	p.StderrType = fdType(info.GetStderr())
 	p.TTY = ttyOf(info.GetStdin(), info.GetStdout(), info.GetStderr())
 	p.StdinPipeComm = truncateComm(info.GetPipeInputProc().GetContextData().GetProcessName())
+}
+
+// applySyscallExec handles a successful execve/execveat exit. The sentry
+// execve point normally precedes it with richer data; if that point was
+// dropped, the row still moves to the new program, with binary-level
+// details (layer flags, hash, stdio) marked unknown.
+func (p *ProcessInfo) applySyscallExec(m *pb.Execve) {
+	invoked := resolvePath(m.GetPathname(), m.GetFd(), m.GetFdPath(), p.Cwd)
+	if invoked == "" || invoked == p.InvokedPath {
+		return
+	}
+	*p = ProcessInfo{
+		Pid:           p.Pid,
+		Ppid:          p.Ppid,
+		Cwd:           p.Cwd,
+		UID:           p.UID,
+		GID:           p.GID,
+		HasCreds:      p.HasCreds,
+		StartTimeNs:   p.StartTimeNs,
+		IsExecSession: p.IsExecSession,
+		TTY:           p.TTY,
+		ExePath:       invoked,
+		InvokedPath:   invoked,
+		Argv:          budgetArgv(m.GetArgv(), maxArgvBytes),
+		Comm:          truncateComm(path.Base(invoked)),
+	}
 }
 
 func invokedPath(info *pb.ExecveInfo) string {
