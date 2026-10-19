@@ -112,7 +112,7 @@ func (p *ProcessInfo) applyContext(ctx *pb.ContextData) {
 func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
 	p.ExePath = info.GetBinaryPath()
 	p.InvokedPath = resolvePath(invokedPath(info), linux.AT_FDCWD, "", p.Cwd)
-	p.Argv = budgetArgv(info.GetArgv(), maxArgvBytes)
+	p.Argv = budgetArgv(info.GetArgv())
 	p.Comm = truncateComm(path.Base(invokedPath(info)))
 	p.HasBinaryInfo = info.GetBinaryMode() != 0
 	p.SHA256 = hex.EncodeToString(info.GetBinarySha256())
@@ -147,7 +147,7 @@ func (p *ProcessInfo) applySyscallExec(m *pb.Execve) {
 		TTY:           p.TTY,
 		ExePath:       invoked,
 		InvokedPath:   invoked,
-		Argv:          budgetArgv(m.GetArgv(), maxArgvBytes),
+		Argv:          budgetArgv(m.GetArgv()),
 		Comm:          truncateComm(path.Base(invoked)),
 	}
 }
@@ -160,7 +160,7 @@ func invokedPath(info *pb.ExecveInfo) string {
 }
 
 func (p *ProcessInfo) applyStart(start *pb.Start) {
-	p.Argv = budgetArgv(start.GetArgs(), maxArgvBytes)
+	p.Argv = budgetArgv(start.GetArgs())
 	if len(p.Argv) > 0 {
 		p.ExePath = p.Argv[0]
 		p.Comm = truncateComm(path.Base(p.Argv[0]))
@@ -186,7 +186,8 @@ func truncateComm(comm string) string {
 	return comm
 }
 
-func budgetArgv(argv []string, budget int) []string {
+func budgetArgv(argv []string) []string {
+	budget := maxArgvBytes
 	out := make([]string, 0, len(argv))
 	for _, arg := range argv {
 		if budget <= 0 {

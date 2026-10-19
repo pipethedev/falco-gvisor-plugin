@@ -161,7 +161,7 @@ func TestSnapshotKeepsOnlyParentArgv(t *testing.T) {
 
 func TestBudgetArgv(t *testing.T) {
 	long := strings.Repeat("a", maxArgvBytes*2)
-	got := budgetArgv([]string{"cmd", long, "tail"}, maxArgvBytes)
+	got := budgetArgv([]string{"cmd", long, "tail"})
 	total := 0
 	for _, a := range got {
 		total += len(a)

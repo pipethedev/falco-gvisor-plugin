@@ -126,7 +126,8 @@ func (p *Point) reencode() error {
 	}
 	raw := make([]byte, 0, len(p.header)+len(payload))
 	raw = append(raw, p.header...)
-	p.Raw = append(raw, payload...)
+	raw = append(raw, payload...)
+	p.Raw = raw
 	p.header = p.Raw[:len(p.header)]
 	return nil
 }
