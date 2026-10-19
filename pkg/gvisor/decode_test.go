@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"google.golang.org/protobuf/encoding/protowire"
 	"google.golang.org/protobuf/proto"
 	pb "gvisor.dev/gvisor/pkg/sentry/seccheck/points/points_go_proto"
 	"gvisor.dev/gvisor/pkg/sentry/seccheck/sinks/remote/wire"
@@ -154,4 +155,22 @@ func FuzzDecodePoint(f *testing.F) {
 		_ = p.PointName()
 		_ = p.Context()
 	})
+}
+
+func TestScrubKeepsUnknownFields(t *testing.T) {
+	const futureField = 999
+	pkt := mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
+		ContextData: testContext(1, 0, "sh"), BinaryPath: "/bin/sh", Env: []string{"SECRET=1"},
+	})
+	unknown := protowire.AppendVarint(protowire.AppendTag(nil, futureField, protowire.VarintType), 7)
+	p, err := DecodePoint(append(pkt, unknown...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(p.Raw, []byte("SECRET")) {
+		t.Error("environment survived the scrub")
+	}
+	if !bytes.Contains(p.Raw, unknown) {
+		t.Error("a field unknown to this gVisor version was lost when the scrubbed message was re-encoded")
+	}
 }
