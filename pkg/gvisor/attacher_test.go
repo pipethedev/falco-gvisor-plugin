@@ -26,6 +26,9 @@ type fakeRunner struct {
 	block     bool
 	nextPID   int32
 	pidOfLast map[string]int32
+	// connect, when set, is called with each attach's pid before it returns,
+	// as the real 'runsc trace create' connects the plugin socket.
+	connect func(pid int32)
 }
 
 func (f *fakeRunner) Run(ctx context.Context, onStart func(pid int32), name string, args ...string) ([]byte, error) {
@@ -38,7 +41,7 @@ func (f *fakeRunner) Run(ctx context.Context, onStart func(pid int32), name stri
 		f.pidOfLast = map[string]int32{}
 	}
 	f.pidOfLast[sandbox] = pid
-	block, fail, list := f.block, f.failFor[sandbox], f.list
+	block, fail, list, connect := f.block, f.failFor[sandbox], f.list, f.connect
 	f.mu.Unlock()
 
 	if onStart != nil {
@@ -53,6 +56,9 @@ func (f *fakeRunner) Run(ctx context.Context, onStart func(pid int32), name stri
 	}
 	if fail {
 		return nil, errors.New("sandbox gone")
+	}
+	if connect != nil {
+		connect(pid)
 	}
 	return nil, nil
 }
@@ -131,8 +137,12 @@ func TestAttacherCommands(t *testing.T) {
 }
 
 func TestAttacherSkipsConnected(t *testing.T) {
-	runner := &fakeRunner{list: runscListJSON}
 	conns := &fakeConns{conns: []ConnInfo{{ContainerIDs: []string{"pod1-app"}}}}
+	runner := &fakeRunner{list: runscListJSON, connect: func(pid int32) {
+		conns.mu.Lock()
+		defer conns.mu.Unlock()
+		conns.conns = append(conns.conns, ConnInfo{PeerPID: pid})
+	}}
 	a, _ := newTestAttacher(runner, conns)
 	a.Sweep(context.Background())
 	if got := runner.attached(); !reflect.DeepEqual(got, []string{"aaa", "bbb"}) {
@@ -140,11 +150,11 @@ func TestAttacherSkipsConnected(t *testing.T) {
 	}
 
 	runner.mu.Lock()
-	idlePID := runner.pidOfLast["aaa"]
+	closedPID := runner.pidOfLast["bbb"]
 	runner.calls = nil
 	runner.mu.Unlock()
 	conns.mu.Lock()
-	conns.conns = append(conns.conns, ConnInfo{PeerPID: idlePID})
+	conns.conns = slices.DeleteFunc(conns.conns, func(c ConnInfo) bool { return c.PeerPID == closedPID })
 	conns.mu.Unlock()
 
 	a.Sweep(context.Background())
