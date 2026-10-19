@@ -17,7 +17,10 @@ const (
 	groupWriteMode = 0o020
 )
 
-const runscExeName = "runsc"
+const (
+	runscExeName     = "runsc"
+	deletedExeSuffix = " (deleted)"
+)
 
 var (
 	errUntrustedPeer      = errors.New("peer uid not allowed")
@@ -61,6 +64,12 @@ func checkSocketDir(dir string, self int) error {
 	return nil
 }
 
+// isRunscExe reports whether a /proc/<pid>/exe target is a runsc binary,
+// including one replaced on disk since it started (an upgrade).
+func isRunscExe(exe string) bool {
+	return exe != "" && filepath.Base(strings.TrimSuffix(exe, deletedExeSuffix)) == runscExeName
+}
+
 // checkPeer decides whether a connecting process may act as a sandbox sink.
 func checkPeer(pid int32, uid uint32, credOK bool, self int, requireRunsc bool) error {
 	if !credOK {
@@ -69,7 +78,7 @@ func checkPeer(pid int32, uid uint32, credOK bool, self int, requireRunsc bool) 
 	if !allowedPeer(uid, self) {
 		return errUntrustedPeer
 	}
-	if requireRunsc && !strings.HasPrefix(filepath.Base(peerExe(pid)), runscExeName) {
+	if requireRunsc && !isRunscExe(peerExe(pid)) {
 		return errPeerNotRunsc
 	}
 	return nil

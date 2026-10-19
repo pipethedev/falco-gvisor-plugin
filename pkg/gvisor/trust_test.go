@@ -99,3 +99,19 @@ func TestCheckPeer(t *testing.T) {
 		}
 	}
 }
+
+func TestIsRunscExe(t *testing.T) {
+	cases := map[string]bool{
+		"/usr/bin/runsc":                    true,
+		"/usr/local/bin/runsc (deleted)":    true,
+		"/usr/bin/runsc-evil":               false,
+		"/tmp/runsc.sh":                     false,
+		"/usr/bin/containerd-shim-runsc-v1": false,
+		"":                                  false,
+	}
+	for exe, want := range cases {
+		if got := isRunscExe(exe); got != want {
+			t.Errorf("isRunscExe(%q) = %v, want %v", exe, got, want)
+		}
+	}
+}
