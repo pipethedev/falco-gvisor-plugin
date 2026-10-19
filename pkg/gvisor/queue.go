@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-const statsOwner = 0
+const (
+	statsOwner = 0
+	compactMin = 1024
+)
 
 var (
 	// ErrNoEvent is returned by Next when no event arrived within the wait.
@@ -121,10 +124,22 @@ func (q *eventQueue) tryPop() (QueuedEvent, bool, error) {
 		delete(q.ownerBytes, evt.owner)
 	}
 	q.stats.QueueBytes.Store(int64(q.bytes))
-	if q.head == len(q.items) {
-		q.items, q.head = q.items[:0], 0
-	}
+	q.compact()
 	return evt, true, nil
+}
+
+// compact reclaims the slots before head once they make up half the backing
+// array, so a queue that never drains completely keeps an array
+// proportional to its live depth instead of growing with every push.
+func (q *eventQueue) compact() {
+	switch {
+	case q.head == len(q.items):
+		q.items, q.head = q.items[:0], 0
+	case q.head >= compactMin && 2*q.head >= len(q.items):
+		live := copy(q.items, q.items[q.head:])
+		clear(q.items[live:])
+		q.items, q.head = q.items[:live], 0
+	}
 }
 
 func (q *eventQueue) close() {

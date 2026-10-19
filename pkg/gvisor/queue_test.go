@@ -114,3 +114,33 @@ func TestQueueCloseAndCancel(t *testing.T) {
 		t.Errorf("cancelled pop err = %v", err)
 	}
 }
+
+func TestQueueStaysBoundedWhileNeverEmpty(t *testing.T) {
+	const (
+		depth  = 64
+		rounds = 200 * compactMin
+	)
+	q := newEventQueue(1<<20, 1, &Stats{})
+	for i := range depth {
+		if err := q.push(ownerA, make([]byte, 8), time.Unix(int64(i), 0)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for i := range rounds {
+		if err := q.push(ownerA, make([]byte, 8), time.Unix(int64(depth+i), 0)); err != nil {
+			t.Fatalf("push %d: %v", i, err)
+		}
+		evt, ok, err := q.tryPop()
+		if !ok || err != nil || evt.Time != time.Unix(int64(i), 0) {
+			t.Fatalf("pop %d = %v, %v, %v; want FIFO order", i, evt.Time, ok, err)
+		}
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if live := len(q.items) - q.head; live != depth {
+		t.Errorf("live depth = %d, want %d", live, depth)
+	}
+	if limit := 4 * (depth + compactMin); cap(q.items) > limit {
+		t.Errorf("backing array grew to %d slots for a live depth of %d", cap(q.items), depth)
+	}
+}
