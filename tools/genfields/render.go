@@ -24,8 +24,12 @@ Differences from Falco's syscall source:
 - ` + "`evt.arg.*`" + ` values are rendered strings (` + "`O_WRONLY|O_CREAT`" + `, ` + "`AF_PACKET`" + `).
 - ` + "`proc.aname`/`proc.aexepath`" + ` require an index; use ` + "`gvisor.anames`" + ` to
   match any ancestor.
-- Container metadata (name, image, labels, k8s) is resolved asynchronously and
-  is empty for the first events of a new container.
+- Container metadata (name, image, labels, k8s) is resolved asynchronously.
+  A new container's first event waits up to ` + "`metadataWaitMillis`" + ` for it.
+- String fields carry the workload's bytes unchanged, so rules match what the
+  workload actually ran. Falco escapes control characters when rendering
+  outputs (verified with Falco 0.45: a newline in argv appears as ` + "`\\n`" + `),
+  so they cannot forge alert lines.
 
 `
 
