@@ -39,6 +39,17 @@ gVisor runs containers on a user-space kernel, so host-kernel sensors (Falco's `
 - The gVisor remote sink writes without blocking and drops points instead of stalling the workload.
 - The plugin never blocks on Falco: events wait in a queue bounded by `maxQueueBytes`, and when it is full they are dropped and counted (`gvisor_stats`), so a burst from a sandbox cannot exhaust Falco's memory.
 
+## Install with falcoctl
+
+Releases publish OCI artifacts: the plugin for `linux/amd64` and `linux/arm64`, and the rules, which depend on the plugin version.
+
+```sh
+falcoctl index add gvisor https://raw.githubusercontent.com/falcosecurity/plugins/main/plugins/gvisor/deploy/falcoctl/index.yaml
+falcoctl artifact install gvisor-rules:0.1.0   # installs the matching gvisor plugin too
+```
+
+Release assets also include `gvisor-<version>-linux-{x86_64,aarch64}.tar.gz` (the plugin) and `gvisor-rules-<version>.tar.gz`. A draft entry for the falcosecurity plugin registry is in [`docs/registry-entry.yaml`](docs/registry-entry.yaml).
+
 ## Quick start (Docker host)
 
 1. Build or pull the image (Falco 0.45 with the plugin, rules and configs):

@@ -1,0 +1,20 @@
+- name: gvisor
+  type: plugin
+  registry: ghcr.io
+  repository: falcosecurity/plugins/plugin/gvisor
+  description: Runtime threat detection for gVisor-sandboxed containers via gVisor Runtime Monitoring
+  home: https://github.com/falcosecurity/plugins/tree/main/plugins/gvisor
+  keywords: [gvisor, runsc, sandbox, containers, kubernetes]
+  license: Apache-2.0
+  maintainers: []
+  sources: [https://github.com/falcosecurity/plugins/tree/main/plugins/gvisor]
+- name: gvisor-rules
+  type: rulesfile
+  registry: ghcr.io
+  repository: falcosecurity/plugins/ruleset/gvisor-rules
+  description: Detection rules for the gvisor event source
+  home: https://github.com/falcosecurity/plugins/tree/main/plugins/gvisor/rules
+  keywords: [gvisor, rules]
+  license: Apache-2.0
+  maintainers: []
+  sources: [https://github.com/falcosecurity/plugins/tree/main/plugins/gvisor/rules]

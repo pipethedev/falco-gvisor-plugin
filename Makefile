@@ -12,7 +12,7 @@ DIST := dist
 VERSION ?= 0.1.0
 LDFLAGS := -s -w -X github.com/falcosecurity/plugins/plugins/gvisor/pkg/gvisor.PluginVersion=$(VERSION:v%=%)
 
-.PHONY: all build build-linux $(addprefix build-linux-,$(ARCHES)) test test-linux test-integration test-gvisor rules-test lint generate rules-tarball image clean
+.PHONY: all build build-linux $(addprefix build-linux-,$(ARCHES)) test test-linux test-integration test-gvisor rules-test lint generate rules-tarball plugin-tarballs image clean
 
 all: build
 
@@ -53,7 +53,11 @@ generate:
 
 rules-tarball:
 	mkdir -p $(DIST)
-	tar -czf $(DIST)/$(NAME)-rules-$(VERSION).tar.gz -C rules gvisor_rules.yaml tools
+	COPYFILE_DISABLE=1 tar -czf $(DIST)/$(NAME)-rules-$(VERSION).tar.gz -C rules gvisor_rules.yaml
+
+plugin-tarballs: build-linux
+	COPYFILE_DISABLE=1 tar -czf $(DIST)/$(NAME)-$(VERSION)-linux-x86_64.tar.gz -C $(DIST)/amd64 $(OUTPUT)
+	COPYFILE_DISABLE=1 tar -czf $(DIST)/$(NAME)-$(VERSION)-linux-aarch64.tar.gz -C $(DIST)/arm64 $(OUTPUT)
 
 image:
 	docker build --build-arg VERSION=$(VERSION) -t falco-gvisor:$(VERSION) -f Dockerfile .

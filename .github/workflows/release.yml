@@ -14,8 +14,10 @@ jobs:
       matrix:
         include:
           - arch: amd64
+            asset_arch: x86_64
             runner: ubuntu-24.04
           - arch: arm64
+            asset_arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
@@ -30,7 +32,7 @@ jobs:
           CGO_ENABLED=1 go build -trimpath -buildmode=c-shared \
             -ldflags "-s -w -X github.com/falcosecurity/plugins/plugins/gvisor/pkg/gvisor.PluginVersion=${VERSION}" \
             -o out/libgvisor.so ./cmd/plugin
-          tar -czf "gvisor-${VERSION}-linux-${{ matrix.arch }}.tar.gz" -C out libgvisor.so
+          tar -czf "gvisor-${VERSION}-linux-${{ matrix.asset_arch }}.tar.gz" -C out libgvisor.so
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: release-${{ matrix.arch }}
@@ -64,6 +66,31 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/falco-gvisor:${{ github.ref_name }}
             ghcr.io/${{ github.repository_owner }}/falco-gvisor:latest
+      - name: Install falcoctl
+        env:
+          FALCOCTL_VERSION: 0.14.2
+          FALCOCTL_SHA256: 9e0c12abdee6f042cffaf33b8bc4103e70f68a597f4d02310e2aa06a860310df
+        run: |
+          curl -fsSLo falcoctl.tgz "https://github.com/falcosecurity/falcoctl/releases/download/v${FALCOCTL_VERSION}/falcoctl_${FALCOCTL_VERSION}_linux_amd64.tar.gz"
+          echo "${FALCOCTL_SHA256}  falcoctl.tgz" | sha256sum -c -
+          tar -xzf falcoctl.tgz falcoctl
+          sudo install falcoctl /usr/local/bin/falcoctl
+      - name: Push plugin and rules OCI artifacts
+        env:
+          REGISTRY_USER: ${{ github.actor }}
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OCI_REPO: ghcr.io/${{ github.repository_owner }}/plugins
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          CONFIG="${RUNNER_TEMP}/falcoctl.yaml"
+          touch "${CONFIG}"
+          echo "${REGISTRY_TOKEN}" | falcoctl --config "${CONFIG}" registry auth basic -u "${REGISTRY_USER}" --password-stdin ghcr.io
+          falcoctl --config "${CONFIG}" registry push --type plugin --version "${VERSION}" --add-floating-tags \
+            --requires plugin_api_version:3.11.0 "${OCI_REPO}/plugin/gvisor:${VERSION}" \
+            "gvisor-${VERSION}-linux-x86_64.tar.gz" --platform linux/amd64 \
+            "gvisor-${VERSION}-linux-aarch64.tar.gz" --platform linux/arm64
+          falcoctl --config "${CONFIG}" registry push --type rulesfile --version "${VERSION}" --add-floating-tags \
+            --depends-on "gvisor:${VERSION}" "${OCI_REPO}/ruleset/gvisor-rules:${VERSION}" "gvisor-rules-${VERSION}.tar.gz"
       - name: GitHub release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:

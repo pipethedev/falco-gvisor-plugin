@@ -1,0 +1,19 @@
+# Draft entry for falcosecurity/plugins registry.yaml (plugins list).
+# The id is assigned by the Falco maintainers in review; 999 is the
+# development id the plugin uses until then. Fill in maintainers before
+# opening the PR.
+- name: gvisor
+  description: Runtime threat detection for gVisor-sandboxed containers via gVisor Runtime Monitoring
+  authors: The Falco Authors
+  contact: https://github.com/falcosecurity/plugins/issues
+  maintainers: []
+  url: https://github.com/falcosecurity/plugins/tree/main/plugins/gvisor
+  rules_url: https://github.com/falcosecurity/plugins/tree/main/plugins/gvisor/rules
+  license: Apache-2.0
+  capabilities:
+    sourcing:
+      supported: true
+      id: 999
+      source: gvisor
+    extraction:
+      supported: true
