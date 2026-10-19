@@ -61,6 +61,7 @@ type Server struct {
 	socketPath   string
 	maxEventSize int
 	maxProcesses int
+	processes    *processBudget
 	metadataWait time.Duration
 	maxHeldBytes int64
 	heldBytes    atomic.Int64
@@ -102,6 +103,7 @@ func NewServer(cfg Config, emit EmitFunc, resolver ContainerResolver, stats *Sta
 		socketPath:   cfg.SocketPath,
 		maxEventSize: cfg.MaxEventSize,
 		maxProcesses: cfg.MaxTrackedProcesses,
+		processes:    &processBudget{limit: maxProcessTablesBytes},
 		metadataWait: cfg.metadataWait(),
 		maxHeldBytes: int64(cfg.MaxQueueBytes),
 		maxConns:     cfg.MaxConnections,
@@ -257,7 +259,8 @@ func (s *Server) serve(sc *sandboxConn) {
 	s.stats.TotalConnections.Add(1)
 	defer s.stats.Connections.Add(-1)
 
-	table := NewProcessTable(s.maxProcesses)
+	table := newBudgetedProcessTable(s.maxProcesses, s.processes)
+	defer table.release()
 	reader, err := newDatagramReader(sc.conn)
 	if err != nil {
 		logger.Printf("sandbox connection %d: %v", sc.id, err)

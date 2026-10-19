@@ -255,6 +255,24 @@ func (p ProcessInfo) clone() ProcessInfo {
 	return c
 }
 
+// rowBytes estimates the memory a process table row holds.
+func (p *ProcessInfo) rowBytes() int64 {
+	size := int64(rowOverheadBytes + len(p.ExePath) + len(p.InvokedPath) + len(p.Cwd) + len(p.Comm) + len(p.SHA256) + len(p.StdinPipeComm))
+	size += argvBytes(p.Argv)
+	if e := p.pending; e != nil {
+		size += int64(len(e.invoked)+len(e.comm)+len(e.oldComm)) + argvBytes(e.argv)
+	}
+	return size
+}
+
+func argvBytes(argv []string) int64 {
+	size := int64(len(argv)) * stringHeaderBytes
+	for _, arg := range argv {
+		size += int64(len(arg))
+	}
+	return size
+}
+
 func truncateComm(comm string) string {
 	if len(comm) > maxCommLen {
 		return comm[:maxCommLen]

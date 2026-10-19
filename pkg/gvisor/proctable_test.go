@@ -375,3 +375,101 @@ func TestProcessTableKeepsGroupWithLiveThreads(t *testing.T) {
 		t.Error("a group whose last known thread exited was not evicted first")
 	}
 }
+
+func tableBytesConsistent(t *testing.T, table *ProcessTable) {
+	t.Helper()
+	var sum int64
+	for pid, size := range table.sizes {
+		if _, ok := table.lookup(pid); !ok {
+			t.Errorf("pid %d has a size but no row", pid)
+		}
+		sum += size
+	}
+	if sum != table.bytes {
+		t.Errorf("table bytes = %d, rows add up to %d", table.bytes, sum)
+	}
+}
+
+func TestProcessTableByteCap(t *testing.T) {
+	table := NewProcessTable(defaultMaxTrackedProcess)
+	table.maxBytes = 64 << 10
+	long := strings.Repeat("a", maxArgvBytes)
+	const procs = 100
+	for pid := int32(2); pid < 2+procs; pid++ {
+		table.Apply(execPoint(t, pid, 1, "/bin/x", long))
+	}
+	if table.bytes > table.maxBytes {
+		t.Errorf("table holds %d bytes, cap %d", table.bytes, table.maxBytes)
+	}
+	if table.Len() >= procs {
+		t.Errorf("no row was evicted: len=%d", table.Len())
+	}
+	if _, ok := table.lookup(1 + procs); !ok {
+		t.Error("the most recent process was evicted")
+	}
+	tableBytesConsistent(t, table)
+}
+
+func TestProcessTablesShareBudget(t *testing.T) {
+	budget := &processBudget{limit: 256 << 10}
+	hostile := newBudgetedProcessTable(defaultMaxTrackedProcess, budget)
+	victim := newBudgetedProcessTable(defaultMaxTrackedProcess, budget)
+	for _, table := range []*ProcessTable{hostile, victim} {
+		table.floorBytes = 32 << 10
+	}
+	long := strings.Repeat("a", maxArgvBytes)
+	for pid := int32(2); pid < 200; pid++ {
+		hostile.Apply(execPoint(t, pid, 1, "/bin/x", long))
+	}
+	if used := budget.used.Load(); used > budget.limit+maxTableRowBytes(t, hostile) {
+		t.Errorf("tables hold %d bytes, budget %d", used, budget.limit)
+	}
+	for pid := int32(2); pid < 6; pid++ {
+		victim.Apply(execPoint(t, pid, 1, "/bin/y", long))
+	}
+	if victim.Len() != 4 {
+		t.Errorf("a table under its floor lost rows: len=%d", victim.Len())
+	}
+	before := hostile.Len()
+	hostile.Apply(execPoint(t, 500, 1, "/bin/x", long))
+	if used := budget.used.Load(); used > budget.limit {
+		t.Errorf("the table over its floor did not give memory back: tables hold %d bytes, budget %d", used, budget.limit)
+	}
+	if hostile.Len() >= before {
+		t.Errorf("the table over its floor lost no rows: len=%d, was %d", hostile.Len(), before)
+	}
+	tableBytesConsistent(t, hostile)
+	tableBytesConsistent(t, victim)
+	hostile.release()
+	victim.release()
+	if used := budget.used.Load(); used != 0 {
+		t.Errorf("released tables still hold %d bytes of the budget", used)
+	}
+}
+
+func maxTableRowBytes(t *testing.T, table *ProcessTable) int64 {
+	t.Helper()
+	var largest int64
+	for _, size := range table.sizes {
+		largest = max(largest, size)
+	}
+	return largest
+}
+
+func TestProcessTableAccountsClonesAndSockets(t *testing.T) {
+	table := NewProcessTable(defaultMaxTrackedProcess)
+	table.Apply(execPoint(t, 2, 1, "/bin/sh", "sh", strings.Repeat("b", 1000)))
+	for fd := int64(3); fd < 20; fd++ {
+		table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_SOCKET, &pb.Socket{
+			ContextData: testContext(2, 1, "sh"), Domain: linux.AF_INET, Type: int32(linux.SOCK_STREAM),
+			Exit: &pb.Exit{Result: fd},
+		}))
+	}
+	table.Apply(clonePoint(t, 2, 1, 3, "sh"))
+	if table.sizes[3] < table.sizes[2] {
+		t.Errorf("the clone's size %d is below its parent's %d", table.sizes[3], table.sizes[2])
+	}
+	table.Apply(exitPoint(t, 3, 3))
+	table.remove(3)
+	tableBytesConsistent(t, table)
+}

@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"maps"
 	"slices"
+	"sync/atomic"
 
 	pb "gvisor.dev/gvisor/pkg/sentry/seccheck/points/points_go_proto"
 )
@@ -11,7 +12,23 @@ import (
 const (
 	maxAncestors      = 8
 	maxTrackedSockets = 256
+	// maxTableBytes caps one sandbox's table; tableFloorBytes is what every
+	// table may hold even when the tables together exceed
+	// maxProcessTablesBytes.
+	maxTableBytes         = 16 << 20
+	tableFloorBytes       = 1 << 20
+	maxProcessTablesBytes = 256 << 20
+	rowOverheadBytes      = 512
+	stringHeaderBytes     = 16
+	socketEntryBytes      = 48
 )
+
+// processBudget is the memory the process tables of all connections share,
+// as estimated by rowBytes.
+type processBudget struct {
+	used  atomic.Int64
+	limit int64
+}
 
 // Snapshot is the process context attached to one event: the acting process
 // and up to maxAncestors of its ancestors, nearest first.
@@ -32,20 +49,72 @@ type Snapshot struct {
 
 // ProcessTable tracks the processes of one sandbox, keyed by thread-group id.
 // It is not safe for concurrent use; each connection owns its own table.
+// Besides holding at most limit processes, it evicts its least recently
+// used rows to stay within maxBytes, and within floorBytes while the tables
+// sharing its budget are over the budget's limit, so one sandbox cannot grow
+// the plugin's memory by forking processes with long command lines.
 type ProcessTable struct {
-	limit   int
-	entries map[int32]*list.Element
-	lru     *list.List
-	sockets map[int32]map[int64]string
+	limit      int
+	maxBytes   int64
+	floorBytes int64
+	budget     *processBudget
+	bytes      int64
+	sizes      map[int32]int64
+	entries    map[int32]*list.Element
+	lru        *list.List
+	sockets    map[int32]map[int64]string
 }
 
 // NewProcessTable returns a table holding at most limit processes.
 func NewProcessTable(limit int) *ProcessTable {
+	return newBudgetedProcessTable(limit, nil)
+}
+
+func newBudgetedProcessTable(limit int, budget *processBudget) *ProcessTable {
 	return &ProcessTable{
-		limit:   limit,
-		entries: make(map[int32]*list.Element),
-		lru:     list.New(),
-		sockets: make(map[int32]map[int64]string),
+		limit:      limit,
+		maxBytes:   maxTableBytes,
+		floorBytes: tableFloorBytes,
+		budget:     budget,
+		sizes:      make(map[int32]int64),
+		entries:    make(map[int32]*list.Element),
+		lru:        list.New(),
+		sockets:    make(map[int32]map[int64]string),
+	}
+}
+
+// release returns the table's memory to the shared budget once its
+// connection is closed.
+func (t *ProcessTable) release() {
+	t.charge(-t.bytes)
+}
+
+func (t *ProcessTable) charge(delta int64) {
+	t.bytes += delta
+	if t.budget != nil {
+		t.budget.used.Add(delta)
+	}
+}
+
+// account updates the estimated size of a row after it changed.
+func (t *ProcessTable) account(proc *ProcessInfo) {
+	size := proc.rowBytes() + int64(len(t.sockets[proc.Pid]))*socketEntryBytes
+	t.charge(size - t.sizes[proc.Pid])
+	t.sizes[proc.Pid] = size
+}
+
+func (t *ProcessTable) overBudget() bool {
+	if t.bytes > t.maxBytes {
+		return true
+	}
+	return t.budget != nil && t.bytes > t.floorBytes && t.budget.used.Load() > t.budget.limit
+}
+
+// trim evicts the least recently used rows while the table is over budget,
+// always keeping the most recent one.
+func (t *ProcessTable) trim() {
+	for t.lru.Len() > 1 && t.overBudget() {
+		t.evictOldest()
 	}
 }
 
@@ -116,6 +185,8 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 			t.retire(proc.Pid)
 		}
 	}
+	t.account(proc)
+	t.trim()
 	return snap
 }
 
@@ -135,6 +206,9 @@ func (t *ProcessTable) applyClone(parent *ProcessInfo, info *pb.CloneInfo) {
 	*t.upsert(child) = created
 	if inherited := t.sockets[parent.Pid]; len(inherited) > 0 {
 		t.sockets[child] = maps.Clone(inherited)
+	}
+	if row, ok := t.lookup(child); ok {
+		t.account(row)
 	}
 }
 
@@ -177,6 +251,8 @@ func (t *ProcessTable) remove(pid int32) {
 		delete(t.entries, pid)
 	}
 	delete(t.sockets, pid)
+	t.charge(-t.sizes[pid])
+	delete(t.sizes, pid)
 }
 
 // recordSocket remembers the transport protocol of a socket fd, so a later
