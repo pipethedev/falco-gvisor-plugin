@@ -15,6 +15,7 @@ const (
 	defaultAttachTimeout = 30 * time.Second
 	defaultAttachGrace   = 15 * time.Second
 	pendingPollInterval  = 500 * time.Millisecond
+	acceptSlack          = time.Second
 	attachConcurrency    = 4
 	statusRunning        = "running"
 	flagRoot             = "--root"
@@ -126,9 +127,10 @@ func (a *Attacher) Sweep(ctx context.Context) {
 		logger.Printf("attacher: %v", err)
 		return
 	}
+	listedAt := time.Now()
 	a.stats.AttacherFailed.Store(false)
 	a.forgetGone(sandboxes)
-	if !a.waitForPendingConnections(ctx) {
+	if !a.waitForPendingConnections(ctx, listedAt) {
 		return
 	}
 	connected := a.connectedSandboxes(sandboxes)
@@ -147,7 +149,7 @@ func (a *Attacher) Sweep(ctx context.Context) {
 			wg.Wait()
 			return
 		}
-		if !a.waitForPendingConnections(ctx) {
+		if !a.waitForPendingConnections(ctx, listedAt) {
 			<-sem
 			wg.Wait()
 			return
@@ -170,10 +172,16 @@ func (a *Attacher) Sweep(ctx context.Context) {
 // waitForPendingConnections holds the sweep while a recently accepted
 // connection has not yet identified its sandbox (no container id seen, no
 // attach binding): attaching now could force-replace that very session.
-// Connections older than attachGrace are no longer considered pending.
-// It returns false if ctx is cancelled.
-func (a *Attacher) waitForPendingConnections(ctx context.Context) bool {
-	for a.hasPendingConnection(time.Now()) {
+// Connections older than attachGrace are no longer considered pending, and
+// neither are those accepted after the sandboxes were listed (plus
+// acceptSlack for the accept to follow the connect): a sandbox's pod-init
+// session connects during 'runsc create', before the sandbox is listed as
+// running, so later connections belong to sandboxes this sweep does not
+// attach. The wait therefore ends at most attachGrace after the listing,
+// however many sandboxes keep starting. It returns false if ctx is
+// cancelled.
+func (a *Attacher) waitForPendingConnections(ctx context.Context, listedAt time.Time) bool {
+	for a.hasPendingConnection(time.Now(), listedAt) {
 		select {
 		case <-ctx.Done():
 			return false
@@ -183,10 +191,13 @@ func (a *Attacher) waitForPendingConnections(ctx context.Context) bool {
 	return true
 }
 
-func (a *Attacher) hasPendingConnection(now time.Time) bool {
+func (a *Attacher) hasPendingConnection(now, listedAt time.Time) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	for _, conn := range a.conns.Connections() {
+		if conn.Since.After(listedAt.Add(acceptSlack)) {
+			continue
+		}
 		if _, bound := a.attached[conn.PeerPID]; bound && conn.PeerPID != 0 {
 			continue
 		}

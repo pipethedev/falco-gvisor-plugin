@@ -349,3 +349,24 @@ func TestAttacherRechecksPendingBeforeEachAttach(t *testing.T) {
 		t.Errorf("attached %v over a connection that arrived during the sweep", got)
 	}
 }
+
+type churningConns struct{}
+
+func (churningConns) Connections() []ConnInfo {
+	return []ConnInfo{{PeerPID: 1, Since: time.Now()}}
+}
+
+func TestAttacherSweepNotHeldOffByChurn(t *testing.T) {
+	runner := &fakeRunner{list: `[{"id":"aaa","status":"running"}]`}
+	a, _ := newTestAttacher(runner, churningConns{})
+	done := make(chan struct{})
+	go func() { a.Sweep(context.Background()); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(testWait):
+		t.Fatal("sandboxes that keep connecting held the sweep off")
+	}
+	if got := runner.attached(); !slices.Equal(got, []string{"aaa"}) {
+		t.Errorf("attached %v, want [aaa]", got)
+	}
+}
