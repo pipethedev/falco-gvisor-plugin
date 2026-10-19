@@ -2,6 +2,7 @@ package gvisor
 
 import (
 	"container/list"
+	"slices"
 
 	pb "gvisor.dev/gvisor/pkg/sentry/seccheck/points/points_go_proto"
 )
@@ -111,16 +112,25 @@ func (t *ProcessTable) evictOldest() {
 	t.remove(oldest.Value.(*ProcessInfo).Pid)
 }
 
+// snapshot copies the process and its ancestors. Argv slices are shared
+// rather than copied: they are only ever replaced, never modified in place.
+// Only the parent's argv is kept, since no field reads older ancestors' argv.
 func (t *ProcessTable) snapshot(proc *ProcessInfo) Snapshot {
-	snap := Snapshot{Process: proc.clone()}
-	seen := map[int32]bool{proc.Pid: true}
-	for ppid := proc.Ppid; len(snap.Ancestors) < maxAncestors && ppid != 0 && !seen[ppid]; {
+	snap := Snapshot{Process: *proc}
+	var visited [maxAncestors + 1]int32
+	visited[0] = proc.Pid
+	seen := visited[:1]
+	for ppid := proc.Ppid; len(snap.Ancestors) < maxAncestors && ppid != 0 && !slices.Contains(seen, ppid); {
 		parent, ok := t.lookup(ppid)
 		if !ok {
 			break
 		}
-		seen[ppid] = true
-		snap.Ancestors = append(snap.Ancestors, parent.clone())
+		seen = append(seen, ppid)
+		ancestor := *parent
+		if len(snap.Ancestors) > 0 {
+			ancestor.Argv = nil
+		}
+		snap.Ancestors = append(snap.Ancestors, ancestor)
 		ppid = parent.Ppid
 	}
 	return snap

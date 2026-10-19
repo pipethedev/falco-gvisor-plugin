@@ -50,6 +50,22 @@ Run on an otherwise idle host and repeat each configuration at least three times
 
 Host: — (CPU, kernel, gVisor version, platform `systrap`/`kvm`, Falco version)
 
+## Microbenchmarks
+
+`go test -run '^$' -bench . ./pkg/gvisor` measures the per-event CPU cost of the plugin itself, without gVisor or Falco. The scenario is a `connect` point from a process with 8 tracked ancestors, each with a ~300-byte argv.
+
+Results on an Apple M4 (darwin/arm64, Go 1.27.2, median of 3 runs of 2000 iterations):
+
+| Benchmark | What it covers | ns/op | B/op | allocs/op |
+|---|---|---|---|---|
+| `DecodePoint` | wire header + protobuf decode | ~530 | 464 | 8 |
+| `ProcessTableApply` | process table update + snapshot | ~920 | 3312 | 4 |
+| `EncodeEvent` | envelope + JSON context | ~4400 | 4870 | 5 |
+| `SourcePipeline` | decode + apply + encode (server side, per event) | ~5600 | 8660 | 17 |
+| `DecodeEventAndExtract` | Falco side: decode + 7 fields | ~6900 | 6340 | 41 |
+
+So one sandbox connection's goroutine handles roughly 175k points/s, and extraction for a 7-field rule costs about 7 µs per event. JSON encoding of the context dominates. These are upper bounds for the plugin's own work; the end-to-end numbers below include gVisor and Falco and have not been measured.
+
 ## Expected costs and knobs
 
 - **The openat profile** emits one point per file open. Request-serving workloads that open files per request (static file servers, interpreters loading modules) will see the largest difference. Measure before enabling it fleet-wide.

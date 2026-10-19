@@ -142,6 +142,22 @@ func TestProcessTableSnapshotIsolated(t *testing.T) {
 	}
 }
 
+func TestSnapshotKeepsOnlyParentArgv(t *testing.T) {
+	table := NewProcessTable(defaultMaxTrackedProcess)
+	table.Apply(execPoint(t, 1, 0, "/bin/init", "init", "--system"))
+	table.Apply(execPoint(t, 2, 1, "/bin/sh", "sh", "-c", "run"))
+	snap := table.Apply(execPoint(t, 3, 2, "/bin/app", "app"))
+	if len(snap.Ancestors) != 2 {
+		t.Fatalf("ancestors = %d", len(snap.Ancestors))
+	}
+	if snap.Ancestors[0].Cmdline() != "sh -c run" {
+		t.Errorf("parent argv lost: %q", snap.Ancestors[0].Cmdline())
+	}
+	if snap.Ancestors[1].Argv != nil || snap.Ancestors[1].Comm != "init" {
+		t.Errorf("grandparent should keep its name but not its argv: %+v", snap.Ancestors[1])
+	}
+}
+
 func TestBudgetArgv(t *testing.T) {
 	long := strings.Repeat("a", maxArgvBytes*2)
 	got := budgetArgv([]string{"cmd", long, "tail"}, maxArgvBytes)
