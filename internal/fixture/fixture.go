@@ -117,6 +117,8 @@ type Event struct {
 	Stdin         string   `json:"stdin"`
 	Stdout        string   `json:"stdout"`
 	StdinPipeProc string   `json:"stdin_pipe_proc"`
+	StdinPath     string   `json:"stdin_path"`
+	ExecSession   bool     `json:"exec_session"`
 
 	Child   int32  `json:"child"`
 	Addr    string `json:"addr"`
@@ -180,6 +182,7 @@ func (e Event) context(containerID string, timeNs int64) *pb.ContextData {
 		ProcessName:         e.Comm,
 		Cwd:                 cwd,
 		Credentials:         &pb.Credentials{RealUid: e.UID, EffectiveUid: e.UID, RealGid: e.UID, EffectiveGid: e.UID},
+		IsExecSession:       e.ExecSession,
 	}
 }
 
@@ -251,6 +254,12 @@ func (e Event) exec(ctx *pb.ContextData) *pb.ExecveInfo {
 		BinaryInMemfd:        e.Memfd,
 		Stdin:                fdInfo(e.Stdin),
 		Stdout:               fdInfo(e.Stdout),
+	}
+	if e.StdinPath != "" {
+		if info.Stdin == nil {
+			info.Stdin = &pb.FdInfo{Mode: linux.S_IFCHR}
+		}
+		info.Stdin.Path = e.StdinPath
 	}
 	if e.StdinPipeProc != "" {
 		info.PipeInputProc = &pb.PipeProcInfo{ContextData: &pb.ContextData{ProcessName: e.StdinPipeProc}}

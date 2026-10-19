@@ -109,6 +109,19 @@ Override the allowlist macros in a file that loads after `gvisor_rules.yaml`. Fi
     condition: replace
 ```
 
+Other tuning hooks:
+
+- `gvisor_miner_sha256` and `gvisor_network_tool_sha256`: override with `(proc.sha256 in (...))` to catch renamed tool binaries by hash.
+- `gvisor_expected_outbound_ports` / `gvisor_expected_outbound`: define normal egress before enabling **gVisor Unexpected Outbound Connection**.
+- `gvisor_sensitive_file_readers`: tools allowed to read their own credential files.
+- Enable rules that are off by default from `falco.yaml`:
+
+  ```yaml
+  rules:
+    - enable:
+        rule: gVisor Terminal Shell in Container
+  ```
+
 Each rule's override macro is named in its condition (`gvisor_*_allowlist`, plus `gvisor_mail_server_workloads` and `gvisor_raw_socket_allowlist`).
 
 ### Mining pool IPs

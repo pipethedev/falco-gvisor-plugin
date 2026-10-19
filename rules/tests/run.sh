@@ -33,6 +33,9 @@ plugins:
 load_plugins: [gvisor]
 rules_files:
   - /rules/gvisor_rules.yaml
+rules:
+  - enable:
+      rule: gVisor Terminal Shell in Container
 json_output: true
 json_include_output_property: true
 stdout_output:

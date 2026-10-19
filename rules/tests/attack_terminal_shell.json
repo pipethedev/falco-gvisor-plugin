@@ -1,0 +1,32 @@
+{
+  "description": "kubectl exec -it into the sandbox starting bash on a terminal (rule disabled by default; the test config enables it).",
+  "expect": [
+    "gVisor Terminal Shell in Container"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 40,
+      "ppid": 0,
+      "comm": "bash",
+      "exe": "/bin/bash",
+      "argv": [
+        "bash"
+      ],
+      "lower_layer": true,
+      "exec_session": true,
+      "stdin_path": "/dev/pts/0"
+    }
+  ]
+}

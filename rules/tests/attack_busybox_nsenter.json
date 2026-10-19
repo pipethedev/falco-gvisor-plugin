@@ -1,0 +1,35 @@
+{
+  "description": "nsenter invoked as a busybox applet, where the process name is busybox.",
+  "expect": [
+    "gVisor Namespace or Mount Tool Executed"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "busybox",
+      "exe": "/bin/busybox",
+      "argv": [
+        "busybox",
+        "nsenter",
+        "-t",
+        "1",
+        "-m",
+        "sh"
+      ],
+      "lower_layer": true
+    }
+  ]
+}

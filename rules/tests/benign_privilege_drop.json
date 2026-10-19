@@ -1,0 +1,58 @@
+{
+  "description": "Root daemons dropping privileges and non-root processes keeping their uid.",
+  "expect": [],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "nginx",
+      "exe": "/usr/sbin/nginx",
+      "argv": [
+        "nginx"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "syscall/setuid",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "nginx",
+      "uid": 101,
+      "id": 101
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 3,
+      "ppid": 1,
+      "comm": "worker",
+      "exe": "/opt/app/worker",
+      "argv": [
+        "worker"
+      ],
+      "lower_layer": true,
+      "uid": 1000
+    },
+    {
+      "point": "syscall/setresuid",
+      "pid": 3,
+      "ppid": 1,
+      "comm": "worker",
+      "uid": 1000,
+      "rid": 1000,
+      "eid": 1000,
+      "sid": 1000
+    }
+  ]
+}

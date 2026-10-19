@@ -1,0 +1,40 @@
+{
+  "description": "A process running as uid 1000 switches to root with setuid(0).",
+  "expect": [
+    "gVisor Privilege Escalation via setuid"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true,
+      "uid": 1000
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "helper",
+      "exe": "/opt/app/helper",
+      "argv": [
+        "helper"
+      ],
+      "lower_layer": true,
+      "uid": 1000
+    },
+    {
+      "point": "syscall/setuid",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "helper",
+      "uid": 0,
+      "id": 0
+    }
+  ]
+}

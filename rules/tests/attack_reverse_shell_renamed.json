@@ -1,0 +1,33 @@
+{
+  "description": "A copied and renamed shell with socket stdio; the shell-name list alone would miss it.",
+  "expect": [
+    "gVisor Shell With Network Socket Stdio"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "updater",
+      "exe": "/usr/local/bin/updater",
+      "argv": [
+        "updater",
+        "-i"
+      ],
+      "upper_layer": true,
+      "stdin": "ipv4",
+      "stdout": "ipv4"
+    }
+  ]
+}

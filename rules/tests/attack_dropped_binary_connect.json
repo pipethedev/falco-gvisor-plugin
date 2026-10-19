@@ -1,0 +1,37 @@
+{
+  "description": "A renamed implant written at runtime (overlay upper layer, outside temp dirs) connects out; no name-based rule applies.",
+  "expect": [
+    "gVisor Dropped Binary Made Outbound Connection"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "kworkerd",
+      "exe": "/usr/local/bin/kworkerd",
+      "argv": [
+        "kworkerd"
+      ],
+      "upper_layer": true
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "kworkerd",
+      "addr": "203.0.113.10:8443"
+    }
+  ]
+}

@@ -63,6 +63,14 @@
 - list: gvisor_download_binaries
   items: [curl, wget, fetch, aria2c, busybox]
 
+# A binary that did not ship in the container image: written to the upper
+# layer at runtime, or living in a temp directory outside the image (tmpfs).
+- macro: gvisor_dropped_binary
+  condition: >
+    (proc.is_exe_upper_layer = true
+     or ((proc.exepath startswith /tmp/ or proc.exepath startswith /var/tmp/ or proc.exepath startswith /dev/shm/)
+         and proc.is_exe_lower_layer = false))
+
 # ---------------------------------------------------------------------------
 # 1. Crypto mining
 # ---------------------------------------------------------------------------
@@ -92,15 +100,19 @@
 - macro: gvisor_mining_allowlist
   condition: (gvisor_never_true)
 
+# Override with (proc.sha256 in (...)) to catch renamed miner binaries.
+- macro: gvisor_miner_sha256
+  condition: (gvisor_never_true)
+
 - rule: gVisor Crypto Miner Executed
   desc: A known cryptocurrency miner binary was executed inside a gVisor sandbox.
   condition: >
-    gvisor_exec and proc.name in (gvisor_miner_binaries)
+    gvisor_exec and (proc.name in (gvisor_miner_binaries) or gvisor_miner_sha256)
     and not gvisor_mining_allowlist
   output: >
     Crypto miner executed in gVisor sandbox (proc=%proc.name exepath=%proc.exepath
     cmdline=%proc.cmdline parent=%proc.pname uid=%user.uid upper_layer=%proc.is_exe_upper_layer
-    sha256=%proc.sha256 container=%container.name image=%container.image id=%container.id
+    sha256=%proc.sha256 exec_session=%gvisor.is_exec_session container=%container.name image=%container.image id=%container.id
     k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: CRITICAL
   source: gvisor
@@ -114,7 +126,7 @@
     and not gvisor_mining_allowlist
   output: >
     Process with crypto-miner arguments in gVisor sandbox (proc=%proc.name exepath=%proc.exepath
-    cmdline=%proc.cmdline parent=%proc.pname uid=%user.uid container=%container.name
+    cmdline=%proc.cmdline parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name
     image=%container.image id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: CRITICAL
   source: gvisor
@@ -127,7 +139,7 @@
     and not gvisor_mining_allowlist
   output: >
     Connection to mining pool port from gVisor sandbox (connection=%fd.name proc=%proc.name
-    cmdline=%proc.cmdline parent=%proc.pname container=%container.name image=%container.image
+    cmdline=%proc.cmdline parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image
     id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: WARNING
   source: gvisor
@@ -140,7 +152,7 @@
     and not gvisor_mining_allowlist
   output: >
     Connection to known mining pool from gVisor sandbox (connection=%fd.name proc=%proc.name
-    cmdline=%proc.cmdline container=%container.name image=%container.image id=%container.id
+    cmdline=%proc.cmdline uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image id=%container.id
     k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: CRITICAL
   source: gvisor
@@ -156,14 +168,18 @@
 - macro: gvisor_network_tool_allowlist
   condition: (gvisor_never_true)
 
+# Override with (proc.sha256 in (...)) to catch renamed scanner binaries.
+- macro: gvisor_network_tool_sha256
+  condition: (gvisor_never_true)
+
 - rule: gVisor Network Scanner Executed
   desc: A network scanning or packet flooding tool was executed inside a gVisor sandbox.
   condition: >
-    gvisor_exec and proc.name in (gvisor_network_tool_binaries)
+    gvisor_exec and (proc.name in (gvisor_network_tool_binaries) or gvisor_network_tool_sha256)
     and not gvisor_network_tool_allowlist
   output: >
     Network scanner executed in gVisor sandbox (proc=%proc.name cmdline=%proc.cmdline
-    parent=%proc.pname uid=%user.uid container=%container.name image=%container.image
+    parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image
     id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: WARNING
   source: gvisor
@@ -184,7 +200,7 @@
     and not gvisor_raw_socket_allowlist
   output: >
     Raw socket created in gVisor sandbox (domain=%evt.arg.domain type=%evt.arg.type proc=%proc.name
-    cmdline=%proc.cmdline parent=%proc.pname uid=%user.uid container=%container.name
+    cmdline=%proc.cmdline parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name
     image=%container.image id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: WARNING
   source: gvisor
@@ -203,7 +219,7 @@
     and not gvisor_mail_server_workloads
   output: >
     Outbound SMTP from gVisor sandbox (connection=%fd.name proc=%proc.name cmdline=%proc.cmdline
-    container=%container.name image=%container.image id=%container.id k8s_ns=%k8s.ns.name
+    uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image id=%container.id k8s_ns=%k8s.ns.name
     k8s_pod=%k8s.pod.name)
   priority: NOTICE
   source: gvisor
@@ -234,7 +250,7 @@
     and not gvisor_runtime_socket_allowlist
   output: >
     Container runtime socket accessed from gVisor sandbox (socket=%fd.name event=%evt.type
-    res=%evt.res proc=%proc.name cmdline=%proc.cmdline parent=%proc.pname container=%container.name
+    res=%evt.res proc=%proc.name cmdline=%proc.cmdline parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name
     image=%container.image id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: CRITICAL
   source: gvisor
@@ -254,7 +270,7 @@
     and not gvisor_host_probe_allowlist
   output: >
     Host kernel interface accessed from gVisor sandbox (file=%fd.name flags=%evt.arg.flags
-    proc=%proc.name cmdline=%proc.cmdline parent=%proc.pname container=%container.name
+    proc=%proc.name cmdline=%proc.cmdline parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name
     image=%container.image id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: CRITICAL
   source: gvisor
@@ -271,7 +287,7 @@
     and not gvisor_ptrace_allowlist
   output: >
     Ptrace attach in gVisor sandbox (request=%evt.arg.request res=%evt.res proc=%proc.name
-    cmdline=%proc.cmdline parent=%proc.pname uid=%user.uid container=%container.name
+    cmdline=%proc.cmdline parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name
     image=%container.image id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: WARNING
   source: gvisor
@@ -284,13 +300,17 @@
   condition: (gvisor_never_true)
 
 - rule: gVisor Namespace or Mount Tool Executed
-  desc: mount, nsenter or unshare was executed inside a sandbox, typical of container escape attempts.
+  desc: mount, nsenter or unshare (including as busybox applets) was executed inside a sandbox, typical of container escape attempts.
   condition: >
-    gvisor_exec and proc.name in (gvisor_namespace_tool_binaries)
+    gvisor_exec
+    and (proc.name in (gvisor_namespace_tool_binaries)
+         or (proc.name = busybox
+             and (proc.args startswith "nsenter " or proc.args startswith "unshare "
+                  or proc.args startswith "mount " or proc.args in (nsenter, unshare, mount))))
     and not gvisor_namespace_tool_allowlist
   output: >
     Namespace or mount tool executed in gVisor sandbox (proc=%proc.name cmdline=%proc.cmdline
-    parent=%proc.pname uid=%user.uid container=%container.name image=%container.image
+    parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image
     id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: WARNING
   source: gvisor
@@ -323,7 +343,7 @@
     Dropped binary executed from temp directory in gVisor sandbox (exepath=%proc.exepath
     cmdline=%proc.cmdline parent=%proc.pname sha256=%proc.sha256 upper_layer=%proc.is_exe_upper_layer
     lower_layer=%proc.is_exe_lower_layer uid=%user.uid
-    container=%container.name image=%container.image id=%container.id k8s_ns=%k8s.ns.name
+    exec_session=%gvisor.is_exec_session container=%container.name image=%container.image id=%container.id k8s_ns=%k8s.ns.name
     k8s_pod=%k8s.pod.name)
   priority: CRITICAL
   source: gvisor
@@ -339,7 +359,7 @@
     and not gvisor_memfd_allowlist
   output: >
     Fileless execution from memfd in gVisor sandbox (exepath=%proc.exepath cmdline=%proc.cmdline
-    parent=%proc.pname uid=%user.uid container=%container.name image=%container.image
+    parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image
     id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: CRITICAL
   source: gvisor
@@ -359,7 +379,7 @@
     and not gvisor_download_pipe_allowlist
   output: >
     Download piped to shell in gVisor sandbox (shell=%proc.name cmdline=%proc.cmdline
-    stdin_from=%gvisor.stdin_pipe_proc parent=%proc.pname uid=%user.uid container=%container.name
+    stdin_from=%gvisor.stdin_pipe_proc parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name
     image=%container.image id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: WARNING
   source: gvisor
@@ -373,15 +393,18 @@
   condition: (gvisor_never_true)
 
 - rule: gVisor Shell With Network Socket Stdio
-  desc: A shell was started with stdin or stdout attached to a network socket, the signature of a reverse or bind shell.
+  desc: >
+    A shell, or a binary that did not ship in the image (so renaming a shell does not evade it),
+    was started with stdin or stdout attached to a network socket: the signature of a reverse
+    or bind shell.
   condition: >
-    gvisor_exec and gvisor_shell_procs
+    gvisor_exec and (gvisor_shell_procs or gvisor_dropped_binary)
     and (proc.stdin.type in (ipv4, ipv6) or proc.stdout.type in (ipv4, ipv6))
     and not gvisor_reverse_shell_allowlist
   output: >
     Shell with network socket stdio in gVisor sandbox (shell=%proc.name cmdline=%proc.cmdline
     stdin=%proc.stdin.type stdout=%proc.stdout.type parent=%proc.pname uid=%user.uid
-    container=%container.name image=%container.image id=%container.id k8s_ns=%k8s.ns.name
+    exec_session=%gvisor.is_exec_session container=%container.name image=%container.image id=%container.id k8s_ns=%k8s.ns.name
     k8s_pod=%k8s.pod.name)
   priority: CRITICAL
   source: gvisor
@@ -401,7 +424,7 @@
     and not gvisor_reverse_shell_allowlist
   output: >
     Reverse shell command line in gVisor sandbox (proc=%proc.name cmdline=%proc.cmdline
-    parent=%proc.pname uid=%user.uid container=%container.name image=%container.image
+    parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image
     id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: CRITICAL
   source: gvisor
@@ -419,7 +442,7 @@
     and not gvisor_persistence_allowlist
   output: >
     Persistence file written in gVisor sandbox (file=%fd.name flags=%evt.arg.flags proc=%proc.name
-    cmdline=%proc.cmdline parent=%proc.pname uid=%user.uid container=%container.name
+    cmdline=%proc.cmdline parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name
     image=%container.image id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: WARNING
   source: gvisor
@@ -433,16 +456,20 @@
   condition: (gvisor_never_true)
 
 - rule: gVisor Connection to Cloud Metadata Service
-  desc: A process connected to a cloud instance metadata endpoint, which can expose node or workload credentials.
+  desc: >
+    A process connected to a cloud instance metadata endpoint, which can expose node or workload
+    credentials. Cloud SDKs do this legitimately when they fetch instance credentials; allowlist
+    those workloads, for example with
+    (container.image startswith "registry.example.com/billing/") or (k8s.ns.name = "batch").
   condition: >
     gvisor_connect
     and fd.rip in ("169.254.169.254", "169.254.170.2", "fd00:ec2::254")
     and not gvisor_metadata_allowlist
   output: >
     Cloud metadata service contacted from gVisor sandbox (connection=%fd.name proc=%proc.name
-    cmdline=%proc.cmdline parent=%proc.pname container=%container.name image=%container.image
+    cmdline=%proc.cmdline parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image
     id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
-  priority: WARNING
+  priority: NOTICE
   source: gvisor
   tags: [gvisor, container, network, mitre_credential_access, T1552.005]
 
@@ -459,11 +486,121 @@
     and not gvisor_sa_token_allowlist
   output: >
     Service account token read in gVisor sandbox (file=%fd.name proc=%proc.name cmdline=%proc.cmdline
-    parent=%proc.pname container=%container.name image=%container.image id=%container.id
+    parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image id=%container.id
     k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: NOTICE
   source: gvisor
   tags: [gvisor, container, mitre_credential_access, T1528]
+
+# ---------------------------------------------------------------------------
+# 7. Behaviour and stock-rule equivalents
+# ---------------------------------------------------------------------------
+
+- macro: gvisor_dropped_binary_network_allowlist
+  condition: (gvisor_never_true)
+
+- rule: gVisor Dropped Binary Made Outbound Connection
+  desc: >
+    A binary that did not ship in the container image opened an outbound network connection.
+    Catches renamed miners, scanners and implants that name-based rules miss.
+  condition: >
+    gvisor_connect and gvisor_dropped_binary
+    and not gvisor_dropped_binary_network_allowlist
+  output: >
+    Binary not from the image made an outbound connection in gVisor sandbox (connection=%fd.name
+    exepath=%proc.exepath cmdline=%proc.cmdline parent=%proc.pname sha256=%proc.sha256
+    upper_layer=%proc.is_exe_upper_layer uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image
+    id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
+  priority: WARNING
+  source: gvisor
+  tags: [gvisor, container, network, mitre_command_and_control, T1105, T1571]
+
+- macro: gvisor_privilege_change_allowlist
+  condition: (gvisor_never_true)
+
+- rule: gVisor Privilege Escalation via setuid
+  desc: >
+    A process that was not running as root asked to switch to uid 0 with setuid or setresuid.
+    Succeeds only with capabilities a non-root workload should not have; failures are attempts.
+  condition: >
+    evt.type in (setuid, setresuid) and gvisor.prev_uid != 0
+    and ((evt.type = setuid and evt.arg.uid = 0)
+         or (evt.type = setresuid and (evt.arg.ruid = 0 or evt.arg.euid = 0 or evt.arg.suid = 0)))
+    and not gvisor_privilege_change_allowlist
+  output: >
+    Non-root process requested root in gVisor sandbox (syscall=%evt.type res=%evt.res
+    previous_uid=%gvisor.prev_uid proc=%proc.name cmdline=%proc.cmdline parent=%proc.pname
+    uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image id=%container.id k8s_ns=%k8s.ns.name
+    k8s_pod=%k8s.pod.name)
+  priority: WARNING
+  source: gvisor
+  tags: [gvisor, container, mitre_privilege_escalation, T1548]
+
+- list: gvisor_sensitive_file_readers
+  items: [ssh, scp, sftp, git, git-remote-http, git-remote-https, aws, gcloud, az, docker, kubectl, helm, psql]
+
+- macro: gvisor_sensitive_file
+  condition: >
+    (fd.name endswith "/.ssh/id_rsa" or fd.name endswith "/.ssh/id_ecdsa" or
+     fd.name endswith "/.ssh/id_ed25519" or fd.name endswith "/.aws/credentials" or
+     fd.name endswith "/.config/gcloud/application_default_credentials.json" or
+     fd.name endswith "/.azure/msal_token_cache.json" or fd.name endswith "/.docker/config.json" or
+     fd.name endswith "/.kube/config" or fd.name endswith "/.git-credentials" or
+     fd.name endswith "/.netrc" or fd.name endswith "/.pgpass")
+
+- macro: gvisor_sensitive_file_allowlist
+  condition: (gvisor_never_true)
+
+- rule: gVisor Sensitive File Read
+  desc: >
+    A credential file (SSH private keys, cloud CLI credentials, registry, kubeconfig, git, netrc,
+    pgpass) was read by a process other than the tool that owns it. Requires the full profile.
+  condition: >
+    gvisor_open_read and gvisor_sensitive_file
+    and not proc.name in (gvisor_sensitive_file_readers)
+    and not gvisor_sensitive_file_allowlist
+  output: >
+    Sensitive file read in gVisor sandbox (file=%fd.name proc=%proc.name cmdline=%proc.cmdline
+    parent=%proc.pname uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image id=%container.id
+    k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
+  priority: WARNING
+  source: gvisor
+  tags: [gvisor, container, mitre_credential_access, T1552.001]
+
+- rule: gVisor Terminal Shell in Container
+  desc: >
+    An interactive shell with a terminal was started through an exec session (docker exec -it,
+    kubectl exec -it). Disabled by default because operators do this routinely.
+  condition: >
+    gvisor_exec and gvisor_shell_procs and gvisor.is_exec_session = true and proc.tty != 0
+  output: >
+    Terminal shell in gVisor sandbox (shell=%proc.name cmdline=%proc.cmdline parent=%proc.pname
+    tty=%proc.tty uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image id=%container.id
+    k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
+  priority: NOTICE
+  source: gvisor
+  enabled: false
+  tags: [gvisor, container, shell, mitre_execution, T1059]
+
+- list: gvisor_expected_outbound_ports
+  items: [53, 80, 443]
+
+- macro: gvisor_expected_outbound
+  condition: (fd.rport in (gvisor_expected_outbound_ports))
+
+- rule: gVisor Unexpected Outbound Connection
+  desc: >
+    Outbound connection to a port outside gvisor_expected_outbound_ports. Disabled by default:
+    override the list or the gvisor_expected_outbound macro for your workloads before enabling.
+  condition: gvisor_connect and not gvisor_expected_outbound
+  output: >
+    Unexpected outbound connection from gVisor sandbox (connection=%fd.name proc=%proc.name
+    cmdline=%proc.cmdline uid=%user.uid exec_session=%gvisor.is_exec_session container=%container.name image=%container.image id=%container.id
+    k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
+  priority: NOTICE
+  source: gvisor
+  enabled: false
+  tags: [gvisor, container, network, mitre_exfiltration, T1041]
 
 # ---------------------------------------------------------------------------
 # Plugin health
