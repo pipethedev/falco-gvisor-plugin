@@ -452,3 +452,75 @@ func TestServerSocketReuse(t *testing.T) {
 		t.Errorf("socket perm = %o", perm)
 	}
 }
+
+type lockedResolver struct {
+	mu    sync.Mutex
+	infos map[string]*ContainerInfo
+}
+
+func (r *lockedResolver) Lookup(id string) *ContainerInfo {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.infos[id]
+}
+
+func (r *lockedResolver) set(id string, info *ContainerInfo) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.infos[id] = info
+}
+
+func TestServerHoldStaysWithinByteBudget(t *testing.T) {
+	const (
+		events   = 16
+		argBytes = 1 << 10
+	)
+	c := newCollector(events)
+	srv, _ := startServer(t, func(cfg *Config) {
+		cfg.MetadataWaitMillis = maxMetadataWaitMillis
+		cfg.MaxQueueBytes = 4 * argBytes
+	}, c, fakeResolver{})
+	conn := connectSandbox(t, srv.socketPath)
+
+	start := time.Now()
+	for i := range events {
+		send(t, conn, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
+			ContextData: testContext(int32(i+1), 0, "sh"), BinaryPath: "/bin/true", Argv: []string{"true", strings.Repeat("x", argBytes)},
+		}))
+	}
+	for i := range events {
+		if evt := c.next(t); evt.Context.Process.Pid != int32(i+1) {
+			t.Fatalf("event %d out of order: pid %d", i, evt.Context.Process.Pid)
+		}
+	}
+	if elapsed := time.Since(start); elapsed > time.Duration(maxMetadataWaitMillis)*time.Millisecond/2 {
+		t.Errorf("events past the hold's byte budget waited %v for metadata", elapsed)
+	}
+	if held := srv.heldBytes.Load(); held != 0 {
+		t.Errorf("held bytes not released: %d", held)
+	}
+}
+
+func TestServerHoldWaitsForEveryNewContainer(t *testing.T) {
+	first, second := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	resolver := &lockedResolver{infos: map[string]*ContainerInfo{}}
+	c := newCollector(2)
+	srv, _ := startServer(t, func(cfg *Config) { cfg.MetadataWaitMillis = maxMetadataWaitMillis }, c, resolver)
+	conn := connectSandbox(t, srv.socketPath)
+
+	for i, id := range []string{first, second} {
+		ctx := testContext(int32(i+1), 0, "sh")
+		ctx.ContainerId = id
+		send(t, conn, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{ContextData: ctx, BinaryPath: "/bin/sh"}))
+	}
+	time.Sleep(50 * time.Millisecond)
+	resolver.set(first, &ContainerInfo{ID: first, Name: "first"})
+	time.Sleep(200 * time.Millisecond)
+	resolver.set(second, &ContainerInfo{ID: second, Name: "second"})
+
+	for _, want := range []string{"first", "second"} {
+		if evt := c.next(t); evt.Context.Container == nil || evt.Context.Container.Name != want {
+			t.Errorf("held event flushed without the metadata of its container %q: %+v", want, evt.Context.Container)
+		}
+	}
+}

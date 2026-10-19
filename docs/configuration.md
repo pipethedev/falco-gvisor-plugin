@@ -35,7 +35,7 @@ gVisor connects to the plugin only when a sandbox starts, and never reconnects. 
 | `criSocket` | `/run/containerd/containerd.sock` | Used by the `cri` provider (also gives pod name, namespace and labels). |
 | `labelAllowlist` | `[]` (all) | Only fetch these labels. |
 | `metadataCacheTTLSeconds` | `600` | How long metadata is cached. |
-| `metadataWaitMillis` | `200` | How long a new container's first events wait for its metadata. Events are held in order and the socket keeps being read meanwhile. `0` disables waiting. |
+| `metadataWaitMillis` | `200` | How long a new container's first events wait for its metadata. Events are held in order and the socket keeps being read meanwhile. Held events use at most `maxQueueBytes` across all sandboxes; beyond that they are passed on without waiting. `0` disables waiting. |
 
 Environment variables are never requested. If a custom session asks for them, they are stripped on arrival and never stored, logged or passed to Falco.
 

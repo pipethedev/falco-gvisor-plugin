@@ -17,12 +17,13 @@ type heldEvent struct {
 }
 
 // metadataHold buffers a connection's events, in order, while the metadata
-// of a container seen for the first time is fetched. The connection keeps
+// of containers seen for the first time is fetched. The connection keeps
 // reading meanwhile, so gVisor's non-blocking writes are never refused.
 type metadataHold struct {
 	events     []heldEvent
+	bytes      int64
 	until      time.Time
-	waitingFor string
+	waitingFor []string
 }
 
 func (h *metadataHold) active() bool {
@@ -33,8 +34,8 @@ func (s *Server) handlePoint(sc *sandboxConn, table *ProcessTable, point Point) 
 	ctx := EventContext{Snapshot: table.Apply(point), Arch: point.Arch}
 	containerID := pointContainerID(point)
 	isNew := containerID != "" && sc.addContainer(containerID)
-	if sc.hold.active() || (isNew && s.metadataWait > 0 && s.resolver.Lookup(containerID) == nil) {
-		s.holdEvent(sc, heldEvent{point: point, ctx: ctx, containerID: containerID})
+	pending := isNew && s.metadataWait > 0 && s.resolver.Lookup(containerID) == nil
+	if (sc.hold.active() || pending) && s.holdEvent(sc, heldEvent{point: point, ctx: ctx, containerID: containerID}, pending) {
 		return
 	}
 	if containerID != "" {
@@ -43,31 +44,66 @@ func (s *Server) handlePoint(sc *sandboxConn, table *ProcessTable, point Point) 
 	s.emitEvent(sc, ctx, point)
 }
 
-func (s *Server) holdEvent(sc *sandboxConn, held heldEvent) {
+// holdEvent adds an event to the connection's hold and reports whether it
+// did. The payloads held by all connections together are limited to
+// maxHeldBytes; when an event does not fit, the hold is flushed and the
+// event is left to be emitted directly, after the events held before it.
+func (s *Server) holdEvent(sc *sandboxConn, held heldEvent, pending bool) bool {
+	size := int64(len(held.point.Raw))
+	if !s.reserveHeld(size) {
+		s.flushHold(sc)
+		return false
+	}
 	if !sc.hold.active() {
 		sc.hold.until = time.Now().Add(s.metadataWait)
-		sc.hold.waitingFor = held.containerID
+	}
+	if pending {
+		sc.hold.waitingFor = append(sc.hold.waitingFor, held.containerID)
 	}
 	held.point.Raw = bytes.Clone(held.point.Raw)
 	held.point.header = nil
 	sc.hold.events = append(sc.hold.events, held)
+	sc.hold.bytes += size
 	if len(sc.hold.events) >= maxHeldEvents {
 		s.flushHold(sc)
+	}
+	return true
+}
+
+func (s *Server) reserveHeld(size int64) bool {
+	for {
+		held := s.heldBytes.Load()
+		if held+size > s.maxHeldBytes {
+			return false
+		}
+		if s.heldBytes.CompareAndSwap(held, held+size) {
+			return true
+		}
 	}
 }
 
 func (s *Server) holdReady(sc *sandboxConn) bool {
-	return time.Now().After(sc.hold.until) || s.resolver.Lookup(sc.hold.waitingFor) != nil
+	if time.Now().After(sc.hold.until) {
+		return true
+	}
+	for _, id := range sc.hold.waitingFor {
+		if s.resolver.Lookup(id) == nil {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Server) flushHold(sc *sandboxConn) {
-	for _, held := range sc.hold.events {
+	s.heldBytes.Add(-sc.hold.bytes)
+	events := sc.hold.events
+	sc.hold = metadataHold{}
+	for _, held := range events {
 		if held.containerID != "" {
 			held.ctx.Container = s.resolver.Lookup(held.containerID)
 		}
 		s.emitEvent(sc, held.ctx, held.point)
 	}
-	sc.hold = metadataHold{}
 }
 
 // holdDeadline is the read deadline that lets a quiet connection flush its

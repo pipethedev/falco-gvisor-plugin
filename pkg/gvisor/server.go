@@ -60,6 +60,8 @@ type Server struct {
 	maxEventSize int
 	maxProcesses int
 	metadataWait time.Duration
+	maxHeldBytes int64
+	heldBytes    atomic.Int64
 	maxConns     int
 	requireRunsc bool
 	captureArgs  bool
@@ -99,6 +101,7 @@ func NewServer(cfg Config, emit EmitFunc, resolver ContainerResolver, stats *Sta
 		maxEventSize: cfg.MaxEventSize,
 		maxProcesses: cfg.MaxTrackedProcesses,
 		metadataWait: cfg.metadataWait(),
+		maxHeldBytes: int64(cfg.MaxQueueBytes),
 		maxConns:     cfg.MaxConnections,
 		requireRunsc: cfg.RequireRunscPeer,
 		captureArgs:  cfg.CaptureArgs,
