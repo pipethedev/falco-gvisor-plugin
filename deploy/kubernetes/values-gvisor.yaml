@@ -26,6 +26,9 @@ falco:
   rules_files:
     - /etc/falco/falco_rules.yaml
     - /etc/falco/rules.d
+  # Report every rule an event matches, not only the first (see
+  # deploy/falco.config.d/gvisor.yaml).
+  rule_matching: all
 
 mounts:
   volumes:

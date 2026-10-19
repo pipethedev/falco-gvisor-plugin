@@ -31,6 +31,12 @@ plugins:
     #   captureArgs: true
     #   maxConnections: 1024
 load_plugins: [gvisor]
+# Report every rule an event matches, not only the first. One gVisor event
+# often matches several rules (a miner dropped in /tmp is both a miner and a
+# dropped binary), and with Falco's default (first) the later ones are lost
+# with their context. It costs a few more alerts per event and applies to
+# every source, including syscall.
+rule_matching: all
 # The rules ship as /etc/falco/rules.d/gvisor_rules.yaml, which the default
 # falco.yaml already loads through its /etc/falco/rules.d entry. Listing the
 # file here too would load it twice, the second time after your overrides in
