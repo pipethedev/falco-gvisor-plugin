@@ -104,6 +104,28 @@ func completeHandshake(t *testing.T, conn *net.UnixConn) {
 	}
 }
 
+// refused dials the server as a sandbox and reports whether the connection
+// was closed without a handshake reply. The server may close it before the
+// handshake is even written, so a failed write also counts as refused.
+func refused(t *testing.T, path string) bool {
+	t.Helper()
+	conn, err := net.DialUnix(networkUnixPacket, nil, &net.UnixAddr{Name: path, Net: networkUnixPacket})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = conn.Close() }()
+	hs, err := proto.Marshal(&pb.Handshake{Version: wire.CurrentVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Write(hs); err != nil {
+		return true
+	}
+	_ = conn.SetReadDeadline(time.Now().Add(testWait))
+	_, err = conn.Read(make([]byte, handshakeBufferSize))
+	return err != nil
+}
+
 func connectSandbox(t *testing.T, path string) *net.UnixConn {
 	t.Helper()
 	conn := dialSandbox(t, path, wire.CurrentVersion)
@@ -306,9 +328,7 @@ func TestServerCapsConnections(t *testing.T) {
 	connectSandbox(t, srv.socketPath)
 	connectSandbox(t, srv.socketPath)
 	waitFor(t, "two connections", func() bool { return stats.Connections.Load() == 2 })
-	extra := dialSandbox(t, srv.socketPath, wire.CurrentVersion)
-	_ = extra.SetReadDeadline(time.Now().Add(testWait))
-	if _, err := extra.Read(make([]byte, handshakeBufferSize)); err == nil {
+	if !refused(t, srv.socketPath) {
 		t.Error("a connection beyond maxConnections completed its handshake")
 	}
 	waitFor(t, "refusal counted", func() bool { return stats.ConnRejected.Load() == 1 })
@@ -320,9 +340,7 @@ func TestServerCapsConnections(t *testing.T) {
 func TestServerRequireRunscPeer(t *testing.T) {
 	c := newCollector(1)
 	srv, stats := startServer(t, func(cfg *Config) { cfg.RequireRunscPeer = true }, c, fakeResolver{})
-	conn := dialSandbox(t, srv.socketPath, wire.CurrentVersion)
-	_ = conn.SetReadDeadline(time.Now().Add(testWait))
-	if _, err := conn.Read(make([]byte, handshakeBufferSize)); err == nil {
+	if !refused(t, srv.socketPath) {
 		t.Error("a non-runsc peer was accepted with requireRunscPeer")
 	}
 	waitFor(t, "peer rejection", func() bool { return stats.PeerRejected.Load() == 1 })
