@@ -33,10 +33,7 @@ const (
 type gvisorPlugin struct {
 	plugins.BasePlugin
 	config gvisor.Config
-
-	cacheNum   uint64
-	cacheEvent *gvisor.Event
-	cacheErr   error
+	cache  *eventCache
 }
 
 func (p *gvisorPlugin) Info() *plugins.Info {
@@ -62,7 +59,8 @@ func (p *gvisorPlugin) Init(raw string) error {
 		return err
 	}
 	p.config = cfg
-	extract.SetAsync(true)
+	p.cache = newEventCache()
+	extract.SetAsync(false)
 	return nil
 }
 
@@ -108,16 +106,17 @@ func (p *gvisorPlugin) String(evt sdk.EventReader) (_ string, err error) {
 }
 
 func (p *gvisorPlugin) decode(evt sdk.EventReader) (*gvisor.Event, error) {
-	if p.cacheEvent != nil && p.cacheNum == evt.EventNum() {
-		return p.cacheEvent, p.cacheErr
-	}
-	data, err := io.ReadAll(evt.Reader())
-	if err != nil {
-		return nil, fmt.Errorf("read event %d: %w", evt.EventNum(), err)
-	}
-	decoded, err := gvisor.DecodeEvent(data)
-	p.cacheNum, p.cacheEvent, p.cacheErr = evt.EventNum(), &decoded, err
-	return p.cacheEvent, err
+	return p.cache.get(evt.EventNum(), func() (*gvisor.Event, error) {
+		data, err := io.ReadAll(evt.Reader())
+		if err != nil {
+			return nil, fmt.Errorf("read event %d: %w", evt.EventNum(), err)
+		}
+		decoded, err := gvisor.DecodeEvent(data)
+		if err != nil {
+			return nil, err
+		}
+		return &decoded, nil
+	})
 }
 
 func (p *gvisorPlugin) Open(params string) (source.Instance, error) {
