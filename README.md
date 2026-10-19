@@ -143,6 +143,7 @@ The lean profile traces `container/start`, `sentry/clone`, `sentry/execve` (with
 - **gVisor runsc release-20261012.0** (arm64, systrap) runs against the plugin in `make test-gvisor`, also a CI job. It checks that:
   - a sandbox with monitoring enabled starts while nothing listens
   - the plugin attaches an unmonitored sandbox
+  - an attached sandbox that stays idle is not attached again by later sweeps
   - binaries dropped on the `/tmp` tmpfs and in `/dev/shm` are detected
   - sandboxes are re-attached after a Falco rules reload
 

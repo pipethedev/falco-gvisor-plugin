@@ -41,6 +41,10 @@ type runscState struct {
 	Annotations map[string]string `json:"annotations"`
 }
 
+// attachBinding ties a 'runsc trace create' process to the sandbox it
+// attaches. That process, not the Sentry, connects the plugin socket
+// (gVisor runs the sink setup there and donates the connected fd to the
+// sandbox), so the connection's peer pid is the pid the binding is keyed by.
 type attachBinding struct {
 	sandboxID string
 	done      bool

@@ -8,6 +8,8 @@
 #   fail-open    a sandbox with the pod-init session starts while nothing
 #                listens on the plugin socket
 #   attach       a sandbox started without monitoring is attached by the plugin
+#   idle         an attached sandbox that stays idle keeps its session and is
+#                not attached again by later sweeps
 #   detect       a binary dropped in /tmp (the tmpfs runsc mounts over an empty
 #                image /tmp) and executed raises an alert
 #   reload       after a rules change Falco reopens the plugin, the sandbox is
@@ -24,6 +26,7 @@ NAME="falco-gvisor-sandbox-test-$$"
 WORK="$(mktemp -d)"
 STARTUP_TIMEOUT=60
 ALERT_TIMEOUT=60
+IDLE_SECONDS=25
 FAILURES=0
 
 pass() { printf 'PASS %s\n' "$*"; }
@@ -129,6 +132,13 @@ docker exec "${NAME}" sh -c '
 docker exec -d "${NAME}" sh -c 'runsc --root /run/gvtest --network=none --ignore-cgroups --overlay2=root:memory run -bundle /run/bundle sandbox1 > /work/sandbox.log 2>&1'
 
 if wait_log "attached trace session to sandbox sandbox1" 1; then pass "attach: unmonitored sandbox attached"; else fail "attach: sandbox1 was never attached"; fi
+sleep "${IDLE_SECONDS}"
+attaches=$(falco_log | grep -c "attached trace session to sandbox sandbox1" || true)
+if [ "${attaches}" -eq 1 ]; then
+  pass "idle: idle sandbox kept its session for ${IDLE_SECONDS}s"
+else
+  fail "idle: idle sandbox1 attached ${attaches} times in ${IDLE_SECONDS}s"
+fi
 sandbox_exec() {
   docker exec "${NAME}" runsc --root /run/gvtest exec sandbox1 /bin/sh -c "$1" >/dev/null 2>&1 || true
 }
