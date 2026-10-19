@@ -57,9 +57,9 @@ var pointExtractors = map[string]extractorFunc{
 	fieldProcCmdline:    procString(ProcessInfo.Cmdline),
 	fieldProcCwd:        procString(func(p ProcessInfo) string { return p.Cwd }),
 	fieldProcTTY:        proc(func(p ProcessInfo) any { return uint64(p.TTY) }),
-	fieldProcUpperLayer: proc(func(p ProcessInfo) any { return p.UpperLayer }),
-	fieldProcLowerLayer: proc(func(p ProcessInfo) any { return p.LowerLayer }),
-	fieldProcFromMemfd:  proc(func(p ProcessInfo) any { return p.FromMemfd }),
+	fieldProcUpperLayer: binaryFlag(func(p ProcessInfo) bool { return p.UpperLayer }),
+	fieldProcLowerLayer: binaryFlag(func(p ProcessInfo) bool { return p.LowerLayer }),
+	fieldProcFromMemfd:  binaryFlag(func(p ProcessInfo) bool { return p.FromMemfd }),
 	fieldProcStdinType:  procString(func(p ProcessInfo) string { return p.StdinType }),
 	fieldProcStdoutType: procString(func(p ProcessInfo) string { return p.StdoutType }),
 	fieldProcStderrType: procString(func(p ProcessInfo) string { return p.StderrType }),
@@ -279,6 +279,18 @@ func proc(get func(ProcessInfo) any) extractorFunc {
 	}
 }
 
+// binaryFlag reports a property of the executable only when the exec point
+// carried binary_info; otherwise false would be indistinguishable from a
+// real "no".
+func binaryFlag(get func(ProcessInfo) bool) extractorFunc {
+	return func(e *Event, _ FieldRequest) (any, bool) {
+		if !e.Context.Process.HasBinaryInfo {
+			return nil, false
+		}
+		return get(e.Context.Process), true
+	}
+}
+
 func procCreds(get func(ProcessInfo) uint32) extractorFunc {
 	return func(e *Event, _ FieldRequest) (any, bool) {
 		if !e.Context.Process.HasCreds {
@@ -318,7 +330,8 @@ func ancestor(index uint64, get func(ProcessInfo) string) extractorFunc {
 		if !ok {
 			return nil, false
 		}
-		return get(p), true
+		v := get(p)
+		return v, v != ""
 	}
 }
 

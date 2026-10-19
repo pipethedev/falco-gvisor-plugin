@@ -271,6 +271,7 @@ func TestExtractExecAndContainer(t *testing.T) {
 		BinaryPath:           "/tmp/xmrig",
 		Argv:                 []string{"/tmp/xmrig", "-o", "stratum+tcp://pool:3333"},
 		BinaryOverlayfsUpper: true,
+		BinaryMode:           linux.S_IFREG | 0o755,
 		Stdin:                &pb.FdInfo{Socket: &pb.SocketInfo{Family: linux.AF_INET}},
 		PipeInputProc:        &pb.PipeProcInfo{ContextData: &pb.ContextData{ProcessName: "curl"}},
 	})
@@ -348,6 +349,36 @@ func TestExtractWithoutMetadata(t *testing.T) {
 	}
 }
 
+func TestExtractBinaryFlagsNeedBinaryInfo(t *testing.T) {
+	evt := eventFor(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
+		ContextData: testContext(43, 42, "x"), BinaryPath: "/tmp/tool", Argv: []string{"tool"},
+	})
+	for _, name := range []string{fieldProcUpperLayer, fieldProcLowerLayer, fieldProcFromMemfd} {
+		if v := get(t, evt, name); v != nil {
+			t.Errorf("%s = %v for an exec without binary_info; want absent", name, v)
+		}
+	}
+}
+
+func TestExtractEmptyAncestorFieldsAbsent(t *testing.T) {
+	table := NewProcessTable(defaultMaxTrackedProcess)
+	table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{ContextData: testContext(1, 0, ""), Exit: &pb.Exit{}}))
+	p := mustPoint(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{ContextData: testContext(2, 1, "sh"), BinaryPath: "/bin/sh", Argv: []string{"sh"}})
+	data, err := EncodeEvent(EventContext{Snapshot: table.Apply(p)}, p.Raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	evt, err := DecodeEvent(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, req := range []FieldRequest{{Name: fieldProcPName}, {Name: fieldProcPExePath}, {Name: fieldProcAName, ArgIndex: 1}, {Name: fieldProcAExePath, ArgIndex: 1}} {
+		if v, ok := ExtractField(&evt, req); ok {
+			t.Errorf("%+v = %#v for a parent with no name or path; want absent", req, v)
+		}
+	}
+}
+
 func TestExtractUnknownProcessValuesAbsent(t *testing.T) {
 	ctx := testContext(9, 1, "")
 	ctx.Credentials = nil
@@ -404,7 +435,7 @@ func TestEveryFieldHasExtractorAndType(t *testing.T) {
 		eventFor(t, pb.MessageType_MESSAGE_SYSCALL_OPEN, &pb.Open{ContextData: testContext(42, 1, "c"), Exit: &pb.Exit{}, Pathname: "/etc/x"}),
 		eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SOCKET, &pb.Socket{ContextData: testContext(42, 1, "c"), Exit: &pb.Exit{}, Domain: linux.AF_INET, Type: int32(linux.SOCK_STREAM)}),
 		eventFor(t, pb.MessageType_MESSAGE_SYSCALL_PTRACE, &pb.Ptrace{ContextData: testContext(42, 1, "c"), Exit: &pb.Exit{}}),
-		eventFor(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{ContextData: testContext(42, 1, "c"), BinaryPath: "/x", BinarySha256: []byte{1}, Stdin: &pb.FdInfo{Mode: linux.S_IFIFO}, Stdout: &pb.FdInfo{Mode: linux.S_IFIFO}, Stderr: &pb.FdInfo{Mode: linux.S_IFIFO}, PipeInputProc: &pb.PipeProcInfo{ContextData: &pb.ContextData{ProcessName: "wget"}}}),
+		eventFor(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{ContextData: testContext(42, 1, "c"), BinaryPath: "/x", BinarySha256: []byte{1}, BinaryMode: linux.S_IFREG | 0o755, Stdin: &pb.FdInfo{Mode: linux.S_IFIFO}, Stdout: &pb.FdInfo{Mode: linux.S_IFIFO}, Stderr: &pb.FdInfo{Mode: linux.S_IFIFO}, PipeInputProc: &pb.PipeProcInfo{ContextData: &pb.ContextData{ProcessName: "wget"}}}),
 		eventFor(t, pb.MessageType_MESSAGE_SENTRY_TASK_EXIT, &pb.TaskExit{ContextData: testContext(42, 1, "c")}),
 		eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SETID, &pb.Setid{ContextData: testContext(42, 1, "c"), Sysno: sysnoOf(t, "setuid"), Exit: &pb.Exit{}}),
 		eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SETID, &pb.Setid{ContextData: testContext(42, 1, "c"), Sysno: sysnoOf(t, "setgid"), Exit: &pb.Exit{}}),

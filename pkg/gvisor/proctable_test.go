@@ -25,6 +25,7 @@ func execPoint(t *testing.T, pid, ppid int32, path string, argv ...string) Point
 		BinaryPath:           path,
 		Argv:                 argv,
 		BinarySha256:         []byte{0xde, 0xad},
+		BinaryMode:           linux.S_IFREG | 0o755,
 		BinaryOverlayfsUpper: true,
 		Stdin:                &pb.FdInfo{Socket: &pb.SocketInfo{Family: linux.AF_INET}},
 		Stdout:               &pb.FdInfo{Mode: linux.S_IFIFO},

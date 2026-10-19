@@ -25,20 +25,21 @@ import (
 )
 
 const (
-	pointExec      = "sentry/execve"
-	pointClone     = "sentry/clone"
-	pointTaskExit  = "sentry/task_exit"
-	pointStart     = "container/start"
-	pointConnect   = "syscall/connect"
-	pointOpenat    = "syscall/openat"
-	pointSocket    = "syscall/socket"
-	pointPtrace    = "syscall/ptrace"
-	pointSetuid    = "syscall/setuid"
-	pointSetresuid = "syscall/setresuid"
-	unixAddrPrefix = "unix:"
-	flagSeparator  = "|"
-	baseTimeNs     = 1_700_000_000_000_000_000
-	stepNs         = int64(time.Millisecond)
+	pointExec         = "sentry/execve"
+	pointClone        = "sentry/clone"
+	pointTaskExit     = "sentry/task_exit"
+	pointStart        = "container/start"
+	pointConnect      = "syscall/connect"
+	pointOpenat       = "syscall/openat"
+	pointSocket       = "syscall/socket"
+	pointPtrace       = "syscall/ptrace"
+	pointSetuid       = "syscall/setuid"
+	pointSetresuid    = "syscall/setresuid"
+	unixAddrPrefix    = "unix:"
+	flagSeparator     = "|"
+	fixtureBinaryPerm = 0o755
+	baseTimeNs        = 1_700_000_000_000_000_000
+	stepNs            = int64(time.Millisecond)
 )
 
 var (
@@ -270,6 +271,7 @@ func (e Event) exec(ctx *pb.ContextData) *pb.ExecveInfo {
 	info := &pb.ExecveInfo{
 		ContextData:          ctx,
 		BinaryPath:           e.Exe,
+		BinaryMode:           linux.S_IFREG | fixtureBinaryPerm,
 		Argv:                 e.Argv,
 		BinaryOverlayfsUpper: e.UpperLayer,
 		BinaryOverlayfsLower: e.LowerLayer,
