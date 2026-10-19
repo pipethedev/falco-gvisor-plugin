@@ -1,182 +1,121 @@
-# gvisor plugin
+# gvisor plugin for Falco
 
-Runtime threat detection for [gVisor](https://gvisor.dev)-sandboxed containers in [Falco](https://falco.org).
+Detect threats inside [gVisor](https://gvisor.dev) sandboxes with [Falco](https://falco.org).
 
-gVisor runs containers on a user-space kernel, so host-kernel sensors (Falco's `modern_ebpf`/`kmod`, Tetragon, Tracee) cannot see processes, execs or file activity inside a sandbox. Falco's built-in gVisor engine was removed in Falco 0.44. This plugin brings that visibility back as an event source, built on gVisor [Runtime Monitoring](https://gvisor.dev/docs/user_guide/runtime_monitoring/): each sandbox streams trace points to the plugin over a Unix socket, and the plugin turns them into Falco events with process ancestry and container metadata.
+## Why
 
-| | |
+gVisor runs each container on its own user-space kernel. That isolates the container well, but it also hides it: host-level security tools (Falco's eBPF and kernel-module drivers, Tetragon, Tracee) can't see what happens inside the sandbox. Falco used to have built-in gVisor support, but it was removed in Falco 0.44.
+
+This plugin brings that visibility back. gVisor's [Runtime Monitoring](https://gvisor.dev/docs/user_guide/runtime_monitoring/) sends the plugin a stream of events from every sandbox (processes started, network connections, privilege changes, …). The plugin passes them to Falco as the `gvisor` event source, so Falco rules can alert on them like on any other event.
+
+```
+container in gVisor ──events──▶ gvisor plugin ──▶ Falco rules ──▶ alerts
+```
+
+## What it detects
+
+The shipped rules ([`rules/gvisor_rules.yaml`](rules/gvisor_rules.yaml)) cover:
+
+| Threat | Examples |
 |---|---|
-| Name | `gvisor` |
-| Event source | `gvisor` |
-| Capabilities | event sourcing, field extraction |
-| Plugin ID | `999` (development id; an official id is being requested in the [registry](https://github.com/falcosecurity/plugins/blob/main/registry.yaml)) |
-| Falco | 0.45 or later (plugin API 3.11) |
-| gVisor | `runsc` releases from 2023 onward |
-| License | Apache-2.0 |
+| Crypto mining | Known miner binaries and arguments, connections to mining pool ports and IPs |
+| Drop and execute | Binaries written to `/tmp` or `/dev/shm` and run, programs run from memory, `curl \| sh` |
+| Reverse shells | `/dev/tcp` tricks, `nc -e`, shells wired to a network socket |
+| Sandbox escape attempts | Container runtime sockets, `nsenter`/`unshare`/`mount`, `ptrace`, host kernel files |
+| Network abuse | Port scanners, raw sockets, SMTP from non-mail workloads |
+| Privilege changes | Non-root processes becoming root |
+| Persistence and credentials | Writes to cron and `authorized_keys`, reads of credential files |
 
-## How it works
+Four rules that need tuning for each environment ship disabled: shells in `kubectl exec` sessions, unexpected outbound connections, cloud metadata access, and service account token reads. Every rule has an allowlist macro you can override. See the [runbook](docs/runbook.md#tuning-rules).
 
-```
- workload ──syscall──▶ gVisor Sentry ──trace points──▶ /run/falco/gvisor.sock (unixpacket)
-                                                             │
- ┌──────────────────────────── Falco ────────────────────────┴──────────────────────┐
- │  source: syscall (modern_ebpf)   host + non-gVisor containers                    │
- │  source: gvisor  (libgvisor.so)                                                  │
- │     ├─ server: one connection per sandbox → per-sandbox process table            │
- │     ├─ attacher: runsc trace create --force for running, unmonitored sandboxes   │
- │     └─ metadata: container id → name/image/labels (Docker API or CRI)            │
- │  rules: gvisor_rules.yaml (source: gvisor) + your syscall rules                  │
- └──────────────────────────────────▶ outputs (stdout / json / http / sidekick)     │
-```
+The plugin also reports on its own health and alerts if sandboxes go unmonitored or events are being dropped.
 
-- **Server.** Accepts one connection per sandbox, performs the remote-sink handshake, and keeps a per-sandbox process table built from `container/start`, `sentry/clone`, `sentry/execve` and `sentry/task_exit`. Every event carries an immutable snapshot of the process and up to 8 ancestors.
-- **Attacher.** gVisor sinks connect only when a sandbox is created and never reconnect. On startup and every `attachIntervalSeconds`, the plugin runs `runsc trace create --force` for every running sandbox without a live connection. Sandboxes started before Falco, or before Falco restarted, are monitored again automatically.
-- **Metadata.** Container name, image and labels (and the pod name, namespace and labels under CRI) are fetched asynchronously and cached. The shipped sessions never request environment variables; if a custom session does, they are stripped on receipt and never stored, logged or passed to Falco.
+## Requirements
 
-### Fail-open by design
+- Falco 0.45 or later
+- gVisor (`runsc`) from 2023 or later
+- Linux, amd64 or arm64
 
-- Every shipped session config sets `"ignore_setup_error": true`, so a sandbox starts when Falco is down or its socket is missing. One case is not covered: if Falco is hung (for example stopped or frozen) while its socket still accepts connections, gVisor waits for the handshake reply without a timeout and sandbox creation blocks until Falco recovers ([upstream issue draft](docs/upstream-issues.md)).
-- The gVisor remote sink writes without blocking and drops points instead of stalling the workload.
-- The plugin never blocks on Falco: events wait in a queue bounded by `maxQueueBytes`, and when it is full they are dropped and counted (`gvisor_stats`), so a burst from a sandbox cannot exhaust Falco's memory.
+## Quick start (Docker)
 
-## Install with falcoctl
-
-Releases publish OCI artifacts: the plugin for `linux/amd64` and `linux/arm64`, and the rules, which depend on the plugin version.
-
-```sh
-falcoctl index add gvisor https://raw.githubusercontent.com/falcosecurity/plugins/main/plugins/gvisor/deploy/falcoctl/index.yaml
-falcoctl artifact install gvisor-rules:0.1.0   # installs the matching gvisor plugin too
-```
-
-Release assets also include `gvisor-<version>-linux-{x86_64,aarch64}.tar.gz` (the plugin) and `gvisor-rules-<version>.tar.gz`. A draft entry for the falcosecurity plugin registry is in [`docs/registry-entry.yaml`](docs/registry-entry.yaml).
-
-## Quick start (Docker host)
-
-1. Build or pull the image (Falco 0.45 with the plugin, rules and configs):
+1. **Build the image.** It's Falco with the plugin, the rules and example configs.
 
    ```sh
-   make image            # or: docker build -t falco-gvisor .
+   make image
    ```
 
-2. Install the trace session config on the host and enable it for the gVisor runtime:
+2. **Turn on monitoring in gVisor.** Copy the trace session file to the host, and tell Docker's `runsc` runtime to use it:
 
    ```sh
    sudo install -D -m 0644 deploy/gvisor-pod-init.json /etc/falco/gvisor-pod-init.json
-   # add "--pod-init-config=/etc/falco/gvisor-pod-init.json" to the runsc runtimeArgs
-   # in /etc/docker/daemon.json (see deploy/docker/daemon.json), then:
+   ```
+
+   In `/etc/docker/daemon.json`, add `"--pod-init-config=/etc/falco/gvisor-pod-init.json"` to the runsc `runtimeArgs` (example: [`deploy/docker/daemon.json`](deploy/docker/daemon.json)), then reload Docker:
+
+   ```sh
    sudo dockerd --validate --config-file /etc/docker/daemon.json && sudo systemctl reload docker
    ```
 
-3. Run Falco (see `deploy/docker/docker-compose.yaml` for the full set of mounts):
+3. **Start Falco.**
 
    ```sh
    docker compose -f deploy/docker/docker-compose.yaml up -d
    ```
 
-4. Trigger a detection:
+4. **Try it.** Run a fake crypto miner in a gVisor container:
 
    ```sh
    docker run --rm --runtime=runsc alpine sh -c \
      'cp /bin/busybox /tmp/xmrig && /tmp/xmrig --donate-level 1 -o stratum+tcp://example.invalid:3333'
    ```
 
-New containers are monitored from their first instruction. Containers that were already running are attached within `attachIntervalSeconds`, or immediately when Falco restarts.
+   Falco's output should show a `gVisor Crypto Miner Executed` alert.
 
-Guides for containerd/Kubernetes (Helm values, runsc shim config), Nomad and host installs are in [`deploy/`](deploy) and [`docs/runbook.md`](docs/runbook.md).
+New containers are monitored from their first instruction. Containers that were already running are picked up automatically within a few minutes, or immediately when Falco restarts.
 
-## Configuration
+If gVisor can't reach Falco (Falco is down, say), sandboxes still start normally; they just aren't monitored until Falco is back.
 
-The plugin takes no open parameters (`open_params`); a non-empty value is rejected when the source opens. Add the plugin with [`deploy/falco.config.d/gvisor.yaml`](deploy/falco.config.d/gvisor.yaml). It is additive to an existing `falco.yaml`, including one running `modern_ebpf` with the `container` plugin. `init_config` is validated against a JSON schema with `additionalProperties: false`.
+**Other platforms:** for containerd and Kubernetes (Helm values and runsc config), Nomad and plain hosts, see [`deploy/`](deploy) and the [runbook](docs/runbook.md).
 
-| Key | Default | Meaning |
-|---|---|---|
-| `socketPath` | `/run/falco/gvisor.sock` | Listener; must match the sink `endpoint` |
-| `maxEventSize` | `1048576` (1 MiB) | Max gVisor message size; larger messages are dropped, counted (`drops_truncated`) and logged with their type. gVisor cannot send a message larger than its socket send buffer (about 208 KiB by default, `net.core.wmem_default`); such points, for example an exec with hundreds of KiB of argv, are dropped by gVisor and counted in `drops_sandbox` |
-| `runscPath` | `runsc` | runsc binary used by the attacher (resolved via `PATH`) |
-| `runscRoot` | `/run/docker/runtime-runc/moby` | runsc state root (containerd/Kubernetes: `/run/containerd/runsc/k8s.io`) |
-| `sessionConfigPath` | `/etc/falco/gvisor-session.json` | Trace session used when attaching |
-| `attachOnOpen` | `true` | Attach running sandboxes when the source opens |
-| `attachIntervalSeconds` | `300` | Periodic sweep for unmonitored sandboxes; `0` disables |
-| `metadataProvider` | `docker` | `docker`, `cri` or `none` |
-| `dockerSocket` | `/var/run/docker.sock` | For the `docker` provider |
-| `criSocket` | `/run/containerd/containerd.sock` | For the `cri` provider |
-| `labelAllowlist` | `[]` (all) | Labels to fetch and expose |
-| `metadataCacheTTLSeconds` | `600` | Metadata cache lifetime |
-| `maxTrackedProcesses` | `4096` | Per-sandbox process table cap |
-| `statsIntervalSeconds` | `60` | Emit a `gvisor_stats` event and log counters; `0` disables |
-| `metadataWaitMillis` | `200` | How long a new container's first events are held, in order, for its metadata. The connection keeps reading meanwhile, so gVisor never sees a full socket. `0` disables |
-| `maxConnections` | `1024` | Maximum concurrent sandbox connections. Further connections are refused, logged and counted (`connections_rejected`), and the health rule fires |
-| `requireRunscPeer` | `false` | Also require the connecting process's executable to be `runsc` (checked through `/proc/<pid>/exe`, so Falco must share the host PID namespace). Connections from root or Falco's user are always required, and connections without peer credentials are refused |
-| `captureArgs` | `true` | Forward process arguments. When `false`, only `argv[0]` is kept in the event and the forwarded packet; the argument-based rules (miner arguments, reverse shell and download-pipe command lines) can no longer match |
-| `maxQueueBytes` | `67108864` (64 MiB) | Byte budget for events waiting for Falco. Each sandbox may use an equal share of it (the budget divided by connected sandboxes, at least two maximum-size events); beyond that its events are dropped and counted (`drops_queue_share`, `drops_channel_full`) |
+## Install with falcoctl
 
-### Trace sessions
-
-| File | Use |
-|---|---|
-| `deploy/gvisor-pod-init.json` | `--pod-init-config` for new sandboxes (lean profile) |
-| `deploy/gvisor-session.json` | `sessionConfigPath` for the attacher (same session, bare format) |
-| `deploy/pod-init-full.json`, `deploy/gvisor-session-full.json` | Lean profile plus `syscall/openat` with `fd_path` |
-
-The lean profile traces `container/start`, `sentry/clone`, `sentry/execve` (with binary info, SHA-256, stdio fd info and the process feeding stdin through a pipe), `sentry/task_exit`, and the exits of `connect`, `socket`, `execve`, `execveat` and `ptrace`. File-based rules (cron/authorized_keys writes, service account tokens, sysrq, `/sys/kernel`) need the full profile, which costs more ([`docs/perf.md`](docs/perf.md)). Every session is named `Default`: gVisor accepts no other name (it logs `only a single "Default" session is supported` and the sandbox runs unmonitored), and `trace create --force` then replaces the pod-init session instead of adding a second one.
-
-## Fields and rules
-
-- Event payload format (for capture readers): [`docs/payload.md`](docs/payload.md).
-- Fields: [`docs/fields.md`](docs/fields.md). Falco's standard names (`proc.*`, `fd.*`, `evt.type`, `container.*`, `k8s.*`) are used wherever the meaning matches, plus `gvisor.*` fields.
-- Rules: [`rules/gvisor_rules.yaml`](rules/gvisor_rules.yaml), all `source: gvisor`:
-  - crypto mining (miner binaries, miner arguments, stratum ports, known pool IPs)
-  - network abuse (scanners, raw sockets, SMTP from non-mail workloads)
-  - sandbox escape and host probing (runtime sockets, sysrq, `/sys/kernel`, ptrace, `nsenter`/`unshare`/`mount`)
-  - drop-and-execute (temp-dir binaries from the upper layer, memfd, `curl | sh`)
-  - reverse shells and persistence
-  - credential access (cloud metadata, service account tokens, credential files)
-  - behaviour and stock-rule equivalents: binaries not from the image making outbound connections, non-root processes switching to root with `setuid`, and rules disabled by default because they need tuning for each environment: terminal shell via exec session, unexpected outbound connections, cloud metadata access and service-account token reads (cloud SDKs and Kubernetes clients do the last two routinely)
-
-  Each rule has an `*_allowlist` override macro, and generic shells and package managers do not alert. `rules/tools/pool_ips.sh` resolves mining pool domains into an IP macro.
-- Rule tests: `make rules-test` runs Falco 0.45 in Docker and replays the fixtures in [`rules/tests`](rules/tests) into the plugin as a fake sandbox. Each attack fixture must fire exactly its expected rules, and the benign Node, Python, Go, nginx and exec-session workloads must fire none.
-
-## Validation status
-
-- **Unit tests** pass with the race detector on macOS, Linux arm64 and Linux amd64 (amd64 under emulation). golangci-lint is clean and the decoders are fuzzed.
-- **Rules:** every fixture, plus the health check, passes against Falco 0.45.0 on arm64 and amd64 (`make rules-test`). That's 39 checks, including traffic recorded from a real runsc sandbox (`rules/tests/captures/`) and a pass with the shipped rule selection that must stay silent on routine pod behaviour.
-- **gVisor runsc release-20261012.0** (arm64, systrap) runs against the plugin in `make test-gvisor`, also a CI job. It checks that:
-  - a sandbox with monitoring enabled starts while nothing listens
-  - the plugin attaches an unmonitored sandbox
-  - an attached sandbox that stays idle is not attached again by later sweeps
-  - binaries dropped on the `/tmp` tmpfs and in `/dev/shm` are detected
-  - sandboxes are re-attached after a Falco rules reload
-
-  The same checks pass with `requireRunscPeer` enabled. Running real sandboxes found the `Default` session requirement, `proc.name` for symlinked binaries, and the `/tmp` tmpfs behaviour.
-- **Packaging:** the release's falcoctl commands were rehearsed against a local OCI registry. `falcoctl artifact install gvisor-rules` resolves the plugin dependency for both `linux/amd64` and `linux/arm64`.
-- **Not yet run:** the Docker-runtime and Kubernetes integration tests (`test/integration/run.sh`), the end-to-end benchmarks (`docs/perf.md`; microbenchmarks are recorded there), runsc on amd64, and the CRI metadata provider against a real containerd.
-
-## Building and testing
+Once a release is published:
 
 ```sh
-make build          # libgvisor.so for the host
-make build-linux    # dist/{amd64,arm64}/libgvisor.so via docker
-make test           # go test -race ./...
-make test-linux     # Linux-only tests from macOS, in a container
-make rules-test     # rules against a real Falco
-make test-gvisor    # real gVisor sandboxes next to Falco (any Docker host allowing privileged containers)
-make test-integration  # needs a Linux host with Docker, runsc and Falco
-make generate       # syscall tables and docs/fields.md
-make lint
+falcoctl index add gvisor https://raw.githubusercontent.com/falcosecurity/plugins/main/plugins/gvisor/deploy/falcoctl/index.yaml
+falcoctl artifact install gvisor-rules:0.1.0   # also installs the matching plugin
 ```
 
-The gVisor module is `gvisor.dev/gvisor` from its `go` branch (see `go.mod` for the exact pseudo-version). The decoder uses the official `points_go_proto` and remote-sink `wire` packages.
+Releases also ship tarballs: `gvisor-<version>-linux-{x86_64,aarch64}.tar.gz` for the plugin and `gvisor-rules-<version>.tar.gz` for the rules.
+
+## Documentation
+
+| Page | What's in it |
+|---|---|
+| [Configuration](docs/configuration.md) | Every setting, the trace session profiles, fail-open behaviour |
+| [Runbook](docs/runbook.md) | Installing, verifying, troubleshooting, tuning rules, upgrades |
+| [Fields](docs/fields.md) | Every field you can use in rules (`proc.*`, `fd.*`, `container.*`, `gvisor.*`, …) |
+| [Performance](docs/perf.md) | Costs of the lean and full profiles |
+| [Development](docs/development.md) | Building, testing, how the plugin works, what has been validated |
+| [Event format](docs/payload.md) | Byte layout of events, for tools that read Falco captures |
 
 ## Limitations
 
-- gVisor drops, without counting them, trace points whose string fields (argv, binary path, process name, working directory) are not valid UTF-8, because protobuf refuses to marshal them. Such activity is invisible to the plugin and to `gvisor_stats`. This must be fixed in gVisor ([upstream issue draft](docs/upstream-issues.md)).
+- **Only what gVisor reports is visible.** The default profile does not include file opens; file-based rules need the [full profile](docs/configuration.md#trace-sessions), which costs more.
+- **Some events can be lost silently.** gVisor drops events whose text (arguments, paths, names) isn't valid UTF-8 without counting them. This needs a fix in gVisor ([issue draft](docs/upstream-issues.md)).
+- **Dropped exec events lose detail.** If gVisor drops an exec event under load, exec rules still fire on the process's next event, but rules that need details about the binary (where it came from, its hash) can't.
+- **Running sandboxes are picked up by polling**, every `attachIntervalSeconds` (5 minutes by default), not instantly.
+- **Process IDs are the sandbox's own**, not the host's.
+- **No response actions.** The plugin detects; to stop containers, use a separate responder on Falco's output.
 
-- Visibility is limited to the configured trace points; the lean profile does not trace file opens.
-- `proc.pid` values are sandbox-internal.
-- Container metadata is fetched asynchronously. A new container's first events are held, in order, for up to `metadataWaitMillis` while the socket keeps being read; if the runtime answers slower, early events carry only `container.id`.
-- If gVisor drops an exec's `sentry/execve` point (counted in `drops_sandbox`), the process's next event stands in for it (`gvisor.is_exec_fallback`), so exec rules still fire, on that event's type. Rules that need binary details (upper/lower layer, memfd, hash, stdio) cannot match it, because only the sentry point carries them.
-- Sandboxes are re-attached by polling (`attachIntervalSeconds`), not in real time, after a Falco restart.
-- Responding to alerts (stopping containers) is out of scope; consume Falco's output with a separate responder.
+## Plugin details
+
+| | |
+|---|---|
+| Name and event source | `gvisor` |
+| Capabilities | event sourcing, field extraction |
+| Plugin ID | `999`, a development ID until the [plugin registry](https://github.com/falcosecurity/plugins/blob/main/registry.yaml) assigns one ([draft entry](docs/registry-entry.yaml)) |
+| Plugin API | 3.11 |
 
 ## License
 
