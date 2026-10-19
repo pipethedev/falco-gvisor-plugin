@@ -279,6 +279,13 @@ func TestExecRunner(t *testing.T) {
 	if _, err := (execRunner{}).Run(ctx, nil, "sleep", "5"); err == nil || time.Since(start) > testWait {
 		t.Errorf("timeout not enforced: %v", err)
 	}
+	big, err := (execRunner{}).Run(context.Background(), nil, "sh", "-c", "head -c 200000 /dev/zero | tr '\\0' a")
+	if err != nil || len(big) != 200000 {
+		t.Errorf("output beyond 64 KiB: %d bytes, %v", len(big), err)
+	}
+	if out, err := (execRunner{outputLimit: 1024}).Run(context.Background(), nil, "sh", "-c", "head -c 2000 /dev/zero"); !errors.Is(err, errOutputTruncated) || out != nil {
+		t.Errorf("output over the limit returned %d bytes, err %v; want errOutputTruncated", len(out), err)
+	}
 	if _, err := (execRunner{}).Run(context.Background(), nil, "/nonexistent/runsc"); err == nil {
 		t.Error("expected error for missing binary")
 	}
