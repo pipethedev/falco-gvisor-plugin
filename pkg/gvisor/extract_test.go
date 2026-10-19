@@ -220,12 +220,32 @@ func TestExtractConnectL4FromTrackedSocket(t *testing.T) {
 	}
 }
 
+func TestL4ProtoOnlyForIPSockets(t *testing.T) {
+	cases := []struct {
+		domain int32
+		typ    linux.SockType
+		want   string
+	}{
+		{linux.AF_INET, linux.SOCK_STREAM, "tcp"},
+		{linux.AF_INET6, linux.SOCK_DGRAM, "udp"},
+		{linux.AF_INET, linux.SOCK_RAW, "raw"},
+		{linux.AF_UNIX, linux.SOCK_STREAM, ""},
+		{linux.AF_UNIX, linux.SOCK_DGRAM, ""},
+		{linux.AF_NETLINK, linux.SOCK_RAW, ""},
+	}
+	for _, c := range cases {
+		if got := l4ProtoOf(c.domain, int32(c.typ)); got != c.want {
+			t.Errorf("l4ProtoOf(%d, %d) = %q, want %q", c.domain, c.typ, got, c.want)
+		}
+	}
+}
+
 func TestExtractSocketAndPtrace(t *testing.T) {
 	evt := eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SOCKET, &pb.Socket{
 		ContextData: testContext(42, 1, "nmap"), Exit: &pb.Exit{Result: 3},
 		Domain: linux.AF_PACKET, Type: int32(linux.SOCK_RAW) | linux.SOCK_CLOEXEC,
 	})
-	if get(t, evt, fieldEvtArgDomain) != "AF_PACKET" || get(t, evt, fieldEvtArgType) != "SOCK_RAW" || get(t, evt, fieldFDL4Proto) != "raw" {
+	if get(t, evt, fieldEvtArgDomain) != "AF_PACKET" || get(t, evt, fieldEvtArgType) != "SOCK_RAW" || get(t, evt, fieldFDL4Proto) != nil {
 		t.Errorf("socket: domain=%v type=%v", get(t, evt, fieldEvtArgDomain), get(t, evt, fieldEvtArgType))
 	}
 

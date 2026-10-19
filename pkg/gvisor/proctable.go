@@ -95,7 +95,7 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 		t.applyClone(proc, m)
 	case *pb.Socket:
 		if exit := m.GetExit(); exit != nil && exit.GetErrorno() == 0 && exit.GetResult() >= 0 {
-			t.recordSocket(proc.Pid, exit.GetResult(), l4ProtoOf(m.GetType()))
+			t.recordSocket(proc.Pid, exit.GetResult(), l4ProtoOf(m.GetDomain(), m.GetType()))
 		}
 	}
 

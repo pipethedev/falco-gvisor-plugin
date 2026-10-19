@@ -63,14 +63,14 @@ func fdViewOf(p Point) (fdView, bool) {
 		v.sip, v.sport = normalizeIP(sa.IP), sa.Port
 		return v, true
 	case *pb.Listen:
-		v := fdView{typ: socketFamilyType(uint32(m.GetSocketFamily())), l4proto: l4ProtoOf(m.GetSocketType())}
+		v := fdView{typ: socketFamilyType(uint32(m.GetSocketFamily())), l4proto: l4ProtoOf(m.GetSocketFamily(), m.GetSocketType())}
 		if sa, ok := parseSockaddr(m.GetAddress()); ok {
 			v.name, v.nameRaw = sa.Endpoint(), sa.Endpoint()
 			v.sip, v.sport = normalizeIP(sa.IP), sa.Port
 		}
 		return v, true
 	case *pb.Socket:
-		return fdView{typ: socketFamilyType(uint32(m.GetDomain())), l4proto: l4ProtoOf(m.GetType())}, true
+		return fdView{typ: socketFamilyType(uint32(m.GetDomain())), l4proto: l4ProtoOf(m.GetDomain(), m.GetType())}, true
 	default:
 		return fdView{}, false
 	}

@@ -136,7 +136,10 @@
   tags: [gvisor, container, mitre_impact, T1496]
 
 - rule: gVisor Connection to Mining Pool Port
-  desc: Outbound connection to a port commonly used by stratum mining pools.
+  desc: >
+    Outbound connection to a port commonly used by stratum mining pools. UDP connections are
+    excluded when the plugin saw the socket being created; when it did not (a process running
+    before the plugin attached), the connection is reported rather than risk missing a TCP miner.
   condition: >
     gvisor_connect and fd.rport in (gvisor_stratum_ports) and not fd.l4proto = udp
     and not gvisor_mining_allowlist
@@ -216,7 +219,9 @@
   condition: (proc.name in (postfix, master, smtp, smtpd, sendmail, exim, exim4, opensmtpd, haraka, mailhog, postal))
 
 - rule: gVisor Outbound SMTP From Non-Mail Workload
-  desc: A workload that is not a mail server connected to an SMTP port, a common sign of spam relaying or exfiltration.
+  desc: >
+    A workload that is not a mail server connected to an SMTP port, a common sign of spam relaying
+    or exfiltration. As with the mining pool port rule, a connection whose protocol is unknown is reported.
   condition: >
     gvisor_connect and fd.rport in (gvisor_smtp_ports) and not fd.l4proto = udp
     and not gvisor_mail_server_workloads

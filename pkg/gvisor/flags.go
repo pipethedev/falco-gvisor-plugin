@@ -120,7 +120,13 @@ func ptraceRequestString(req int64) string {
 	return strconv.FormatInt(req, 10)
 }
 
-func l4ProtoOf(typ int32) string {
+// l4ProtoOf names the transport protocol of an IPv4 or IPv6 socket, and
+// returns "" for other families, whose stream and datagram sockets are not
+// TCP or UDP.
+func l4ProtoOf(domain, typ int32) string {
+	if domain != linux.AF_INET && domain != linux.AF_INET6 {
+		return ""
+	}
 	switch linux.SockType(typ) & sockTypeMask {
 	case linux.SOCK_STREAM:
 		return "tcp"
