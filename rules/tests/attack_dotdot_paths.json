@@ -1,0 +1,39 @@
+{
+  "description": "Absolute paths that climb with '..' are normalised before prefix rules see them: a cron file written through /tmp/.. and a dropped binary run through /var/tmp/.. (full profile).",
+  "expect": [
+    "gVisor Write to Cron or SSH Authorized Keys",
+    "gVisor Dropped Binary Executed From Temp Directory"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "syscall/openat",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "path": "/tmp/../etc/cron.d/job",
+      "flags": "O_WRONLY|O_CREAT|O_TRUNC"
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "update",
+      "exe": "/var/tmp/../tmp/update",
+      "argv": [
+        "/var/tmp/../tmp/update"
+      ],
+      "upper_layer": true
+    }
+  ]
+}

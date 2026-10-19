@@ -549,3 +549,22 @@ func TestExtractCreatOnAMD64(t *testing.T) {
 		t.Errorf("creat: evt.type=%v fd.name=%v is_open_write=%v", typ, name, write)
 	}
 }
+
+func TestResolvePathCleansAbsolutePaths(t *testing.T) {
+	cases := []struct {
+		pathname, dirPath, want string
+		dirfd                   int64
+	}{
+		{"/tmp/../etc/cron.d/job", "", "/etc/cron.d/job", linux.AT_FDCWD},
+		{"/var/tmp/../run/secrets/token", "", "/var/run/secrets/token", linux.AT_FDCWD},
+		{"/etc/./passwd", "", "/etc/passwd", linux.AT_FDCWD},
+		{"../etc/shadow", "", "/etc/shadow", linux.AT_FDCWD},
+		{"job", "/etc/cron.d", "/etc/cron.d/job", 5},
+		{"", "", "", linux.AT_FDCWD},
+	}
+	for _, c := range cases {
+		if got := resolvePath(c.pathname, c.dirfd, c.dirPath, "/app"); got != c.want {
+			t.Errorf("resolvePath(%q) = %q, want %q", c.pathname, got, c.want)
+		}
+	}
+}

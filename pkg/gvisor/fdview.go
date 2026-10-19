@@ -92,7 +92,7 @@ func socketView(sa Sockaddr) fdView {
 
 func resolvePath(pathname string, dirfd int64, dirPath, cwd string) string {
 	if pathname == "" || path.IsAbs(pathname) {
-		return pathname
+		return cleanPath(pathname)
 	}
 	base := cwd
 	if dirfd != linux.AT_FDCWD {
@@ -102,6 +102,16 @@ func resolvePath(pathname string, dirfd int64, dirPath, cwd string) string {
 		return ""
 	}
 	return path.Join(base, pathname)
+}
+
+// cleanPath removes "." and ".." elements from an absolute path, so prefix
+// rules see /tmp/../etc/cron.d/job as /etc/cron.d/job. Symlinks are not
+// resolved; the sandbox's file system is not visible here.
+func cleanPath(p string) string {
+	if !path.IsAbs(p) {
+		return p
+	}
+	return path.Clean(p)
 }
 
 func normalizeIP(ip net.IP) net.IP {

@@ -146,7 +146,7 @@ func (p *ProcessInfo) applyContext(ctx *pb.ContextData) {
 
 func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
 	p.threads = 0
-	p.ExePath = info.GetBinaryPath()
+	p.ExePath = cleanPath(info.GetBinaryPath())
 	p.InvokedPath = resolvePath(invokedPath(info), linux.AT_FDCWD, "", p.Cwd)
 	p.Argv = budgetArgv(info.GetArgv())
 	p.Comm = truncateComm(path.Base(invokedPath(info)))
