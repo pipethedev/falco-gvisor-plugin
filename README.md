@@ -109,6 +109,7 @@ The lean profile traces `container/start`, `sentry/clone`, `sentry/execve` (with
 
 ## Fields and rules
 
+- Event payload format (for capture readers): [`docs/payload.md`](docs/payload.md).
 - Fields: [`docs/fields.md`](docs/fields.md). Falco's standard names (`proc.*`, `fd.*`, `evt.type`, `container.*`, `k8s.*`) are used wherever the meaning matches, plus `gvisor.*` fields.
 - Rules: [`rules/gvisor_rules.yaml`](rules/gvisor_rules.yaml), all `source: gvisor`:
   - crypto mining (miner binaries, miner arguments, stratum ports, known pool IPs)
