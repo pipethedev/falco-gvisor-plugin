@@ -4,8 +4,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 )
+
+const untrustedTestGID = 12345
 
 func TestAllowedPeer(t *testing.T) {
 	const self = 1000
@@ -38,6 +41,24 @@ func TestCheckSocketDir(t *testing.T) {
 	}
 	if err := checkSocketDir(open, self); !errors.Is(err, errUntrustedSocketDir) {
 		t.Errorf("world-writable directory accepted: %v", err)
+	}
+
+	group := filepath.Join(base, "group")
+	if err := os.Mkdir(group, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(group, 0o770); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(group); err == nil {
+		if st, ok := info.Sys().(*syscall.Stat_t); ok && st.Gid == rootGID {
+			if err := os.Chown(group, -1, untrustedTestGID); err != nil {
+				t.Skipf("cannot give the test directory a non-root group: %v", err)
+			}
+		}
+	}
+	if err := checkSocketDir(group, self); !errors.Is(err, errUntrustedSocketDir) {
+		t.Errorf("group-writable directory with a non-root group accepted: %v", err)
 	}
 
 	link := filepath.Join(base, "link")

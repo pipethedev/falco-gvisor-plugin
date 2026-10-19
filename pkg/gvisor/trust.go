@@ -10,7 +10,9 @@ import (
 
 const (
 	rootUID        = 0
+	rootGID        = 0
 	otherWriteMode = 0o002
+	groupWriteMode = 0o020
 )
 
 var (
@@ -26,8 +28,9 @@ func allowedPeer(uid uint32, self int) bool {
 }
 
 // checkSocketDir rejects socket directories another user could use to swap
-// or intercept the socket: symlinks, world-writable directories and
-// directories owned by someone other than root or Falco's user.
+// or intercept the socket: symlinks, world-writable directories,
+// group-writable directories whose group is not root, and directories
+// owned by someone other than root or Falco's user.
 func checkSocketDir(dir string, self int) error {
 	info, err := os.Lstat(dir)
 	if err != nil {
@@ -39,8 +42,15 @@ func checkSocketDir(dir string, self int) error {
 	if info.Mode().Perm()&otherWriteMode != 0 {
 		return fmt.Errorf("%w: %s is writable by other users", errUntrustedSocketDir, dir)
 	}
-	if st, ok := info.Sys().(*syscall.Stat_t); ok && !allowedPeer(st.Uid, self) {
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil
+	}
+	if !allowedPeer(st.Uid, self) {
 		return fmt.Errorf("%w: %s is owned by uid %d", errUntrustedSocketDir, dir, st.Uid)
+	}
+	if info.Mode().Perm()&groupWriteMode != 0 && st.Gid != rootGID {
+		return fmt.Errorf("%w: %s is writable by group %d", errUntrustedSocketDir, dir, st.Gid)
 	}
 	return nil
 }

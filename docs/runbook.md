@@ -10,7 +10,7 @@ Falco needs:
 - **The runtime socket** for metadata: the Docker socket (`metadataProvider: docker`) or the CRI socket (`cri`).
 - **Root**, or permission to connect to the runsc control sockets and run `runsc trace create`.
 
-The listening socket is created with mode `0660`, owned by Falco's user and group. The plugin refuses to listen if the socket directory is a symlink, is writable by other users, or is owned by a user other than root or Falco's. It also rejects connections from processes running as any user other than root or Falco's (checked with `SO_PEERCRED`), counted in `gvisor.stats.peer_rejected`. runsc creates sandboxes as root, so rootless runsc is not supported.
+The listening socket is created with mode `0660`, owned by Falco's user and group. The plugin refuses to listen if the socket directory is a symlink, is writable by other users, is group-writable with a group other than root, or is owned by a user other than root or Falco's. Use a `0750` (or `0755`) directory owned by root. It also rejects connections from processes running as any user other than root or Falco's (checked with `SO_PEERCRED`), counted in `gvisor.stats.peer_rejected`. runsc creates sandboxes as root, so rootless runsc is not supported.
 
 ## Finding the runsc state root
 
