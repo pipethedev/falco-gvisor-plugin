@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -377,9 +378,13 @@ func removeStaleSocket(path string) error {
 		return fmt.Errorf("%s exists and is not a socket", path)
 	}
 	dialer := &net.Dialer{Timeout: staleProbeTimeout}
-	if conn, err := dialer.DialContext(context.Background(), networkUnixPacket, path); err == nil {
+	conn, err := dialer.DialContext(context.Background(), networkUnixPacket, path)
+	if err == nil {
 		_ = conn.Close()
 		return fmt.Errorf("%w: %s", errSocketInUse, path)
+	}
+	if !errors.Is(err, syscall.ECONNREFUSED) {
+		return fmt.Errorf("%w (probe: %w): %s", errSocketInUse, err, path)
 	}
 	if err := os.Remove(path); err != nil {
 		return fmt.Errorf("remove stale socket %s: %w", path, err)
