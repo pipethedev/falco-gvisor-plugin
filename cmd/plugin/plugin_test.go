@@ -75,3 +75,12 @@ func TestRecoverInto(t *testing.T) {
 		t.Error("panic not converted into an error")
 	}
 }
+
+func TestBatchSizeBoundsMemory(t *testing.T) {
+	cases := map[uint32]uint32{64 << 10: maxBatchSize, 1<<20 + 40<<10: 30, 64 << 20: 1}
+	for eventSize, want := range cases {
+		if got := batchSize(eventSize); got != want || uint64(got)*uint64(eventSize) > batchMemoryBudget && got != 1 {
+			t.Errorf("batchSize(%d) = %d, want %d", eventSize, got, want)
+		}
+	}
+}

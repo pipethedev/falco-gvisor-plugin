@@ -1,6 +1,7 @@
 package gvisor
 
 import (
+	"bytes"
 	"errors"
 	"testing"
 
@@ -112,6 +113,31 @@ func TestDecodePointScrubsEnvironment(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestReencodeKeepsExtendedHeader(t *testing.T) {
+	payload, err := proto.Marshal(&pb.ExecveInfo{BinaryPath: "/bin/sh", Env: []string{"SECRET=1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const extended = wire.HeaderStructSize + 4
+	hdr := wire.Header{HeaderSize: extended, MessageType: uint16(pb.MessageType_MESSAGE_SENTRY_EXEC), DroppedCount: 7}
+	pkt := make([]byte, extended)
+	hdr.MarshalBytes(pkt)
+	copy(pkt[wire.HeaderStructSize:], []byte{0xaa, 0xbb, 0xcc, 0xdd})
+	pkt = append(pkt, payload...)
+
+	p, err := DecodePoint(pkt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(p.Raw[:extended], pkt[:extended]) {
+		t.Errorf("re-encoding after stripping env lost the extended header: % x", p.Raw[:extended])
+	}
+	again, err := DecodePoint(p.Raw)
+	if err != nil || again.Dropped != 7 || len(again.Msg.(*pb.ExecveInfo).GetEnv()) != 0 {
+		t.Errorf("re-encoded packet: %v, dropped=%d", err, again.Dropped)
 	}
 }
 

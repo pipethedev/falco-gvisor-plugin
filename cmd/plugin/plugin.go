@@ -24,6 +24,8 @@ const (
 	pluginDescription  = "Runtime threat detection for gVisor-sandboxed containers via gVisor Runtime Monitoring"
 	requiredAPIVersion = "3.11.0"
 	pullWait           = 10 * time.Millisecond
+	maxBatchSize       = 128
+	batchMemoryBudget  = 32 << 20
 )
 
 // gvisorPlugin implements the Falco source and extractor capabilities.
@@ -140,10 +142,12 @@ func (p *gvisorPlugin) Open(params string) (source.Instance, error) {
 		evt.SetTimestamp(uint64(queued.Time.UnixNano()))
 		return nil
 	}
+	eventSize := gvisor.MaxPluginEventSize(p.config)
 	instance, err := source.NewPullInstance(
 		pull,
 		source.WithInstanceClose(src.Close),
-		source.WithInstanceEventSize(gvisor.MaxPluginEventSize(p.config)),
+		source.WithInstanceEventSize(eventSize),
+		source.WithInstanceBatchSize(batchSize(eventSize)),
 	)
 	if err != nil {
 		src.Close()
@@ -165,4 +169,10 @@ func validateOpenParams(params string) error {
 		return fmt.Errorf("%w (got %q)", errOpenParams, params)
 	}
 	return nil
+}
+
+// batchSize bounds the memory the SDK preallocates for a batch, which is
+// batch size times the maximum event size.
+func batchSize(eventSize uint32) uint32 {
+	return max(1, min(maxBatchSize, batchMemoryBudget/eventSize))
 }

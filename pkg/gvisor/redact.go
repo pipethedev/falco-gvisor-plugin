@@ -19,11 +19,9 @@ func redactArgs(p Point) (Point, error) {
 	if !changed {
 		return p, nil
 	}
-	raw, err := encodePacket(p.Type, p.Dropped, p.Msg)
-	if err != nil {
+	if err := p.reencode(); err != nil {
 		return Point{}, err
 	}
-	p.Raw = raw
 	return p, nil
 }
 

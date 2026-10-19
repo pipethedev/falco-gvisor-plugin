@@ -6,7 +6,7 @@ const initSchema = `{
   "additionalProperties": false,
   "properties": {
     "socketPath": {"type": "string", "default": "/run/falco/gvisor.sock", "description": "Unix seqpacket socket the gVisor remote sink connects to; must match the sink endpoint"},
-    "maxEventSize": {"type": "integer", "minimum": 1024, "maximum": 4194304, "default": 65536, "description": "Maximum message size; larger messages are dropped and counted"},
+    "maxEventSize": {"type": "integer", "minimum": 1024, "maximum": 16777216, "default": 1048576, "description": "Maximum gVisor message size; larger messages are dropped, counted and logged. gVisor cannot send a message larger than its socket send buffer (about 208 KiB by default), so the default leaves headroom"},
     "runscPath": {"type": "string", "default": "runsc", "description": "runsc binary used by the attacher"},
     "runscRoot": {"type": "string", "default": "/run/docker/runtime-runc/moby", "description": "runsc state root"},
     "sessionConfigPath": {"type": "string", "default": "/etc/falco/gvisor-session.json", "description": "Trace session config used when attaching to running sandboxes"},

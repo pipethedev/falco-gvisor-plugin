@@ -19,7 +19,7 @@ plugins:
     #   criSocket: /run/containerd/containerd.sock
     #   labelAllowlist: []
     #   metadataCacheTTLSeconds: 600
-    #   maxEventSize: 65536
+    #   maxEventSize: 1048576
     #   maxTrackedProcesses: 4096
     #   statsIntervalSeconds: 60
     #   metadataWaitMillis: 200

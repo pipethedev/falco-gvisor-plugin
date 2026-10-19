@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"golang.org/x/sys/unix"
 	"google.golang.org/protobuf/proto"
 	pb "gvisor.dev/gvisor/pkg/sentry/seccheck/points/points_go_proto"
 	"gvisor.dev/gvisor/pkg/sentry/seccheck/sinks/remote/wire"
@@ -28,6 +27,7 @@ const (
 	acceptRetryDelay    = 100 * time.Millisecond
 	staleProbeTimeout   = 500 * time.Millisecond
 	maxConnContainers   = 256
+	oversizeLogInterval = 10 * time.Second
 )
 
 var (
@@ -229,21 +229,28 @@ func (s *Server) serve(sc *sandboxConn) {
 	defer s.stats.Connections.Add(-1)
 
 	table := NewProcessTable(s.maxProcesses)
-	buf := make([]byte, s.maxEventSize)
+	reader, err := newDatagramReader(sc.conn)
+	if err != nil {
+		logger.Printf("sandbox connection %d: %v", sc.id, err)
+		return
+	}
 	var lastDropped uint32
+	var lastOversizeLog time.Time
 	for {
-		n, _, flags, _, err := sc.conn.ReadMsgUnix(buf, nil)
+		msg, err := reader.next(s.maxEventSize)
+		var oversize *oversizeError
+		if errors.As(err, &oversize) {
+			s.stats.DropTruncated.Add(1)
+			if time.Since(lastOversizeLog) > oversizeLogInterval {
+				lastOversizeLog = time.Now()
+				logger.Printf("sandbox connection %d: dropped %v (limit %d); raise maxEventSize", sc.id, oversize, s.maxEventSize)
+			}
+			continue
+		}
 		if err != nil {
 			return
 		}
-		if n == 0 {
-			return
-		}
-		if flags&unix.MSG_TRUNC != 0 {
-			s.stats.DropTruncated.Add(1)
-			continue
-		}
-		point, err := DecodePoint(buf[:n])
+		point, err := DecodePoint(msg)
 		if err == nil && !s.captureArgs {
 			point, err = redactArgs(point)
 		}

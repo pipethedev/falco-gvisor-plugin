@@ -23,6 +23,8 @@ type Point struct {
 	Msg     proto.Message
 	Raw     []byte
 	Arch    string
+
+	header []byte
 }
 
 type contextual interface {
@@ -77,15 +79,13 @@ func DecodePoint(msg []byte) (Point, error) {
 	if err := proto.Unmarshal(payload, decoded); err != nil {
 		return Point{}, fmt.Errorf("unmarshal %s: %w", msgType, err)
 	}
-	raw := msg
+	p := Point{Type: msgType, Dropped: hdr.DroppedCount, Msg: decoded, Raw: msg, Arch: runtime.GOARCH, header: msg[:hdr.HeaderSize]}
 	if scrubEnvironment(decoded) {
-		scrubbed, err := encodePacket(msgType, hdr.DroppedCount, decoded)
-		if err != nil {
+		if err := p.reencode(); err != nil {
 			return Point{}, err
 		}
-		raw = scrubbed
 	}
-	return Point{Type: msgType, Dropped: hdr.DroppedCount, Msg: decoded, Raw: raw, Arch: runtime.GOARCH}, nil
+	return p, nil
 }
 
 // Context returns the point's common context data, or nil when absent.
@@ -115,6 +115,20 @@ func scrubEnvironment(msg proto.Message) bool {
 		}
 	}
 	return false
+}
+
+// reencode rebuilds Raw from the (modified) message, keeping the original
+// wire header bytes so header fields a newer gVisor adds are preserved.
+func (p *Point) reencode() error {
+	payload, err := proto.Marshal(p.Msg)
+	if err != nil {
+		return fmt.Errorf("marshal %s: %w", p.Type, err)
+	}
+	raw := make([]byte, 0, len(p.header)+len(payload))
+	raw = append(raw, p.header...)
+	p.Raw = append(raw, payload...)
+	p.header = p.Raw[:len(p.header)]
+	return nil
 }
 
 func encodePacket(msgType pb.MessageType, dropped uint32, msg proto.Message) ([]byte, error) {

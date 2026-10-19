@@ -91,7 +91,7 @@ The plugin takes no open parameters (`open_params`); a non-empty value is reject
 | Key | Default | Meaning |
 |---|---|---|
 | `socketPath` | `/run/falco/gvisor.sock` | Listener; must match the sink `endpoint` |
-| `maxEventSize` | `65536` | Max message size; larger messages are dropped and counted |
+| `maxEventSize` | `1048576` (1 MiB) | Max gVisor message size; larger messages are dropped, counted (`drops_truncated`) and logged with their type. gVisor cannot send a message larger than its socket send buffer (about 208 KiB by default, `net.core.wmem_default`); such points, for example an exec with hundreds of KiB of argv, are dropped by gVisor and counted in `drops_sandbox` |
 | `runscPath` | `runsc` | runsc binary used by the attacher (resolved via `PATH`) |
 | `runscRoot` | `/run/docker/runtime-runc/moby` | runsc state root (containerd/Kubernetes: `/run/containerd/runsc/k8s.io`) |
 | `sessionConfigPath` | `/etc/falco/gvisor-session.json` | Trace session used when attaching |

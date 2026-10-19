@@ -11,7 +11,7 @@ import (
 
 const (
 	defaultSocketPath         = "/run/falco/gvisor.sock"
-	defaultMaxEventSize       = 65536
+	defaultMaxEventSize       = 1 << 20
 	defaultRunscPath          = "runsc"
 	defaultRunscRoot          = "/run/docker/runtime-runc/moby"
 	defaultSessionConfigPath  = "/etc/falco/gvisor-session.json"
@@ -27,7 +27,7 @@ const (
 	minMaxQueueBytes          = 1 << 20
 	maxMaxQueueBytes          = 4 << 30
 	minMaxEventSize           = 1024
-	maxMaxEventSize           = 4 << 20
+	maxMaxEventSize           = 16 << 20
 	maxMaxTrackedProcesses    = 1 << 20
 	providerDocker            = "docker"
 	providerCRI               = "cri"

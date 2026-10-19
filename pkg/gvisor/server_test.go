@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -236,6 +237,20 @@ func TestServerReconnectStartsFreshProcessTable(t *testing.T) {
 	evt := c.next(t)
 	if evt.Context.Process.ExePath != "" || evt.Context.Process.Comm != "new" {
 		t.Errorf("state from the previous connection leaked into a reconnected sandbox: %+v", evt.Context.Process)
+	}
+}
+
+func TestServerDeliversLargeExec(t *testing.T) {
+	c := newCollector(2)
+	srv, stats := startServer(t, nil, c, fakeResolver{})
+	conn := connectSandbox(t, srv.socketPath)
+	padding := strings.Repeat("A", 150<<10)
+	send(t, conn, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
+		ContextData: testContext(1, 0, "sh"), BinaryPath: "/tmp/xmrig", Argv: []string{"/tmp/xmrig", padding},
+	}))
+	evt := c.next(t)
+	if evt.Context.Process.ExePath != "/tmp/xmrig" || stats.DropTruncated.Load() != 0 {
+		t.Errorf("an exec with 150 KiB of argv was not delivered under the default maxEventSize (truncated=%d)", stats.DropTruncated.Load())
 	}
 }
 

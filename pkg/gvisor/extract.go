@@ -96,6 +96,7 @@ var statsExtractors = map[string]func(StatsSnapshot) any{
 	fieldStatsConnections:     func(s StatsSnapshot) any { return uint64(max(s.Connections, 0)) },
 	fieldStatsEventsPerSecond: func(s StatsSnapshot) any { return uint64(s.EventsPerSecond) },
 	fieldStatsDrops:           func(s StatsSnapshot) any { return s.TotalDrops() },
+	fieldStatsDropsInterval:   func(s StatsSnapshot) any { return s.DropsInterval },
 	fieldStatsDropChannelFull: func(s StatsSnapshot) any { return s.DropChannelFull },
 	fieldStatsDropQueueShare:  func(s StatsSnapshot) any { return s.DropQueueShare },
 	fieldStatsDropTruncated:   func(s StatsSnapshot) any { return s.DropTruncated },

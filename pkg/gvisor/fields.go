@@ -101,6 +101,7 @@ const (
 	fieldStatsConnections     = "gvisor.stats.connections"
 	fieldStatsEventsPerSecond = "gvisor.stats.events_per_second"
 	fieldStatsDrops           = "gvisor.stats.drops"
+	fieldStatsDropsInterval   = "gvisor.stats.drops_interval"
 	fieldStatsDropChannelFull = "gvisor.stats.drops_channel_full"
 	fieldStatsDropQueueShare  = "gvisor.stats.drops_queue_share"
 	fieldStatsDropTruncated   = "gvisor.stats.drops_truncated"
@@ -201,6 +202,7 @@ var fieldDefs = []FieldDef{
 	field(fieldStatsConnections, typeUint64, "gvisor_stats: live sandbox connections."),
 	field(fieldStatsEventsPerSecond, typeUint64, "gvisor_stats: events per second since the previous stats event."),
 	field(fieldStatsDrops, typeUint64, "gvisor_stats: total dropped points."),
+	field(fieldStatsDropsInterval, typeUint64, "gvisor_stats: points dropped since the previous gvisor_stats event."),
 	field(fieldStatsDropChannelFull, typeUint64, "gvisor_stats: points dropped because the event queue's total budget (maxQueueBytes) was full."),
 	field(fieldStatsDropQueueShare, typeUint64, "gvisor_stats: points dropped because one sandbox used its fair share of the event queue (maxQueueBytes divided by connected sandboxes)."),
 	field(fieldStatsDropTruncated, typeUint64, "gvisor_stats: points dropped for exceeding maxEventSize."),

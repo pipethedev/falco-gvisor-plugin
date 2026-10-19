@@ -624,13 +624,15 @@
   tags: [gvisor, plugin_health]
 
 - rule: gVisor Monitoring Dropping Events
-  desc: The gvisor plugin reported dropped trace points. Enable to surface monitoring gaps as alerts.
-  condition: evt.type = gvisor_stats and gvisor.stats.drops > 0
+  desc: >
+    The gvisor plugin dropped trace points since the previous stats event (oversized messages,
+    a full queue, sandbox-side write failures, decode errors). Each drop is a monitoring gap.
+  condition: evt.type = gvisor_stats and gvisor.stats.drops_interval > 0
   output: >
-    gVisor monitoring is dropping events (drops=%gvisor.stats.drops channel_full=%gvisor.stats.drops_channel_full
+    gVisor monitoring dropped events (since_last=%gvisor.stats.drops_interval total=%gvisor.stats.drops
+    queue_full=%gvisor.stats.drops_channel_full queue_share=%gvisor.stats.drops_queue_share
     sandbox=%gvisor.stats.drops_sandbox truncated=%gvisor.stats.drops_truncated
-    connections=%gvisor.stats.connections attach_failures=%gvisor.stats.attach_failures)
-  priority: INFORMATIONAL
+    decode=%gvisor.stats.drops_decode_error connections=%gvisor.stats.connections)
+  priority: NOTICE
   source: gvisor
-  enabled: false
   tags: [gvisor, plugin_health]

@@ -48,6 +48,7 @@ type StatsSnapshot struct {
 	AttachAttempts       uint64  `json:"attach_attempts"`
 	AttachFailures       uint64  `json:"attach_failures"`
 	QueueBytes           int64   `json:"queue_bytes"`
+	DropsInterval        uint64  `json:"drops_interval"`
 	UnmonitoredSandboxes int64   `json:"unmonitored_sandboxes"`
 	AttacherFailed       bool    `json:"attacher_failed"`
 	TimeNs               int64   `json:"time_ns"`
@@ -76,6 +77,9 @@ func (s *Stats) Snapshot(prev StatsSnapshot, now time.Time) StatsSnapshot {
 		UnmonitoredSandboxes: s.UnmonitoredSandboxes.Load(),
 		AttacherFailed:       s.AttacherFailed.Load(),
 		TimeNs:               now.UnixNano(),
+	}
+	if total, before := snap.TotalDrops(), prev.TotalDrops(); prev.TimeNs > 0 && total >= before {
+		snap.DropsInterval = total - before
 	}
 	if prev.TimeNs > 0 && snap.TimeNs > prev.TimeNs {
 		elapsed := time.Duration(snap.TimeNs - prev.TimeNs).Seconds()
