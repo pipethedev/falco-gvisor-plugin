@@ -63,6 +63,9 @@ start_falco() {
     fi
     sleep 1
   done
+  docker logs "${NAME}" 2>&1 | tail -20
+  echo "falco did not start listening within ${STARTUP_TIMEOUT}s" >&2
+  exit 1
 }
 
 # run_pass CONFIG DIR: replays every fixture in rules/DIR and checks that
