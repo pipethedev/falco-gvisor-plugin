@@ -40,7 +40,7 @@
   condition: (evt.type = "gvisor_never_true")
 
 - macro: gvisor_exec
-  condition: (evt.type = sentry_execve)
+  condition: (evt.type = sentry_execve or gvisor.is_exec_fallback = true)
 
 - macro: gvisor_connect
   condition: (evt.type = connect and fd.type in (ipv4, ipv6))

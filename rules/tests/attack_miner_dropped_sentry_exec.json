@@ -1,0 +1,43 @@
+{
+  "description": "gVisor dropped the sentry/execve point of a miner exec (drops_sandbox), so only the execve syscall exit arrived. The process's next event, its exit, stands in for the exec and the miner rule still fires.",
+  "expect": [
+    "gVisor Crypto Miner Executed"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/clone",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "child": 2
+    },
+    {
+      "point": "syscall/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "xmrig",
+      "exe": "/tmp/xmrig",
+      "argv": [
+        "/tmp/xmrig",
+        "--donate-level",
+        "1"
+      ]
+    },
+    {
+      "point": "sentry/task_exit",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "xmrig"
+    }
+  ]
+}

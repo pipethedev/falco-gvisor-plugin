@@ -88,6 +88,7 @@ var pointExtractors = map[string]extractorFunc{
 	fieldGvisorANames:        extractANames,
 	fieldGvisorExitStatus:    extractExitStatus,
 	fieldGvisorPrevUID:       extractPrevUID,
+	fieldGvisorExecFallback:  func(e *Event, _ FieldRequest) (any, bool) { return e.Context.ExecFallback, true },
 	fieldGvisorStdinPipeProc: procString(func(p ProcessInfo) string { return p.StdinPipeComm }),
 }
 

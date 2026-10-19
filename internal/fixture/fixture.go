@@ -30,6 +30,7 @@ const (
 	pointTaskExit     = "sentry/task_exit"
 	pointStart        = "container/start"
 	pointConnect      = "syscall/connect"
+	pointExecve       = "syscall/execve"
 	pointOpenat       = "syscall/openat"
 	pointSocket       = "syscall/socket"
 	pointPtrace       = "syscall/ptrace"
@@ -221,6 +222,10 @@ func (e Event) message(containerID string, timeNs int64) (pb.MessageType, proto.
 		return pb.MessageType_MESSAGE_SENTRY_CLONE, &pb.CloneInfo{ContextData: ctx, CreatedThreadGroupId: e.Child, CreatedThreadId: e.Child}, nil
 	case pointTaskExit:
 		return pb.MessageType_MESSAGE_SENTRY_TASK_EXIT, &pb.TaskExit{ContextData: ctx}, nil
+	case pointExecve:
+		return syscallMsg(pb.MessageType_MESSAGE_SYSCALL_EXECVE, "execve", func(nr uint64) proto.Message {
+			return &pb.Execve{ContextData: ctx, Exit: exit, Sysno: nr, Pathname: e.Exe, Argv: e.Argv}
+		})
 	case pointConnect:
 		addr, err := sockaddr(e.Addr)
 		if err != nil {

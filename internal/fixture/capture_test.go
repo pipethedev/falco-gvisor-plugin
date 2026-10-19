@@ -20,6 +20,7 @@ type realEvent struct {
 	upper  bool
 	lower  bool
 	fdName string
+	execFB bool
 }
 
 func realCaptureEvents(t *testing.T) []realEvent {
@@ -67,6 +68,7 @@ func realCaptureEvents(t *testing.T) []realEvent {
 		events = append(events, realEvent{
 			point: str("gvisor.point"), comm: str("proc.name"), exe: str("proc.exepath"),
 			upper: flag("proc.is_exe_upper_layer"), lower: flag("proc.is_exe_lower_layer"), fdName: str("fd.name"),
+			execFB: flag("gvisor.is_exec_fallback"),
 		})
 	}
 	return events
@@ -93,6 +95,18 @@ func TestRealRunscCaptureSemantics(t *testing.T) {
 		{"leader exit carries the exited process", func(e realEvent) bool {
 			return e.point == "sentry/task_exit" && e.comm == "update"
 		}},
+	}
+	syscallExecs := 0
+	for _, e := range events {
+		if e.point == "syscall/execve/exit" {
+			syscallExecs++
+		}
+		if e.execFB {
+			t.Errorf("real capture: %s %s flagged as an exec fallback though no sentry/execve point was dropped", e.comm, e.point)
+		}
+	}
+	if syscallExecs == 0 {
+		t.Error("real capture has no syscall exec exits to check the fallback flag against")
 	}
 	for _, w := range want {
 		found := false

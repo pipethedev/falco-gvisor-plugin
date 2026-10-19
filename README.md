@@ -139,7 +139,7 @@ The lean profile traces `container/start`, `sentry/clone`, `sentry/execve` (with
 ## Validation status
 
 - **Unit tests** pass with the race detector on macOS, Linux arm64 and Linux amd64 (amd64 under emulation). golangci-lint is clean and the decoders are fuzzed.
-- **Rules:** every fixture, plus the health check, passes against Falco 0.45.0 on arm64 and amd64 (`make rules-test`). That's 38 checks, including traffic recorded from a real runsc sandbox (`rules/tests/captures/`) and a pass with the shipped rule selection that must stay silent on routine pod behaviour.
+- **Rules:** every fixture, plus the health check, passes against Falco 0.45.0 on arm64 and amd64 (`make rules-test`). That's 39 checks, including traffic recorded from a real runsc sandbox (`rules/tests/captures/`) and a pass with the shipped rule selection that must stay silent on routine pod behaviour.
 - **gVisor runsc release-20261012.0** (arm64, systrap) runs against the plugin in `make test-gvisor`, also a CI job. It checks that:
   - a sandbox with monitoring enabled starts while nothing listens
   - the plugin attaches an unmonitored sandbox
@@ -172,7 +172,8 @@ The gVisor module is `gvisor.dev/gvisor` from its `go` branch (see `go.mod` for 
 
 - Visibility is limited to the configured trace points; the lean profile does not trace file opens.
 - `proc.pid` values are sandbox-internal.
-- Container metadata is fetched asynchronously. A new container's first event waits up to `metadataWaitMillis` for it; if the runtime answers slower, early events carry only `container.id`.
+- Container metadata is fetched asynchronously. A new container's first events are held, in order, for up to `metadataWaitMillis` while the socket keeps being read; if the runtime answers slower, early events carry only `container.id`.
+- If gVisor drops an exec's `sentry/execve` point (counted in `drops_sandbox`), the process's next event stands in for it (`gvisor.is_exec_fallback`), so exec rules still fire, on that event's type. Rules that need binary details (upper/lower layer, memfd, hash, stdio) cannot match it, because only the sentry point carries them.
 - Sandboxes are re-attached by polling (`attachIntervalSeconds`), not in real time, after a Falco restart.
 - Responding to alerts (stopping containers) is out of scope; consume Falco's output with a separate responder.
 

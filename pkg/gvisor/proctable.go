@@ -24,6 +24,9 @@ type Snapshot struct {
 	// L4 is the transport protocol of the socket a connect used, when the
 	// socket() call that created it was seen.
 	L4 string `json:"l4,omitempty"`
+	// ExecFallback marks the first event of a process after an exec whose
+	// sentry/execve point was never received, so exec rules still see it.
+	ExecFallback bool `json:"execfb,omitempty"`
 }
 
 // ProcessTable tracks the processes of one sandbox, keyed by thread-group id.
@@ -67,6 +70,9 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 		uid := proc.UID
 		prevUID = &uid
 	}
+	_, sentryExec := p.Msg.(*pb.ExecveInfo)
+	execFallback := proc.execPending && !sentryExec
+	proc.execPending = false
 	proc.applyContext(ctx)
 
 	switch m := p.Msg.(type) {
@@ -88,6 +94,7 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 
 	snap := t.snapshot(proc)
 	snap.PrevUID = prevUID
+	snap.ExecFallback = execFallback
 	if c, ok := p.Msg.(*pb.Connect); ok {
 		snap.L4 = t.sockets[proc.Pid][c.GetFd()]
 	}

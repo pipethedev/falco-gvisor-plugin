@@ -59,6 +59,9 @@ type ProcessInfo struct {
 	StderrType    string   `json:"stderr,omitempty"`
 	TTY           uint32   `json:"tty,omitempty"`
 	StdinPipeComm string   `json:"stdinpipe,omitempty"`
+	// execPending is set by a successful execve/execveat exit and cleared
+	// by the sentry/execve point that runsc sends right after it.
+	execPending bool
 }
 
 // Exe returns argv[0], or the exe path when argv is unknown.
@@ -110,6 +113,7 @@ func (p *ProcessInfo) applyContext(ctx *pb.ContextData) {
 }
 
 func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
+	p.execPending = false
 	p.ExePath = info.GetBinaryPath()
 	p.InvokedPath = resolvePath(invokedPath(info), linux.AT_FDCWD, "", p.Cwd)
 	p.Argv = budgetArgv(info.GetArgv())
@@ -126,11 +130,12 @@ func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
 	p.StdinPipeComm = truncateComm(info.GetPipeInputProc().GetContextData().GetProcessName())
 }
 
-// applySyscallExec handles a successful execve/execveat exit. The sentry
-// execve point normally precedes it with richer data; if that point was
-// dropped, the row still moves to the new program, with binary-level
-// details (layer flags, hash, stdio) marked unknown.
+// applySyscallExec handles a successful execve/execveat exit. runsc sends
+// it just before the sentry/execve point, which then replaces the row with
+// richer data; if that point is dropped, the row has still moved to the new
+// program, with binary-level details (layer flags, hash, stdio) unknown.
 func (p *ProcessInfo) applySyscallExec(m *pb.Execve) {
+	p.execPending = true
 	invoked := resolvePath(m.GetPathname(), m.GetFd(), m.GetFdPath(), p.Cwd)
 	if invoked == "" || invoked == p.InvokedPath {
 		return
@@ -149,6 +154,7 @@ func (p *ProcessInfo) applySyscallExec(m *pb.Execve) {
 		InvokedPath:   invoked,
 		Argv:          budgetArgv(m.GetArgv()),
 		Comm:          truncateComm(path.Base(invoked)),
+		execPending:   true,
 	}
 }
 
@@ -175,6 +181,7 @@ func (p *ProcessInfo) applyStart(start *pb.Start) {
 
 func (p ProcessInfo) clone() ProcessInfo {
 	c := p
+	c.execPending = false
 	c.Argv = append([]string(nil), p.Argv...)
 	return c
 }
