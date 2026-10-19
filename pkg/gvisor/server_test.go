@@ -222,6 +222,23 @@ func TestServerReleasesClosedConnections(t *testing.T) {
 	waitFor(t, "connection release", func() bool { return stats.Connections.Load() == 0 && len(srv.Connections()) == 0 })
 }
 
+func TestServerReconnectStartsFreshProcessTable(t *testing.T) {
+	c := newCollector(4)
+	srv, stats := startServer(t, nil, c, fakeResolver{})
+	first := connectSandbox(t, srv.socketPath)
+	send(t, first, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{ContextData: testContext(5, 1, "old"), BinaryPath: "/bin/old", Argv: []string{"old"}}))
+	c.next(t)
+	_ = first.Close()
+	waitFor(t, "first connection released", func() bool { return stats.Connections.Load() == 0 })
+
+	second := connectSandbox(t, srv.socketPath)
+	send(t, second, mustPacket(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{ContextData: testContext(5, 1, "new"), Exit: &pb.Exit{}}))
+	evt := c.next(t)
+	if evt.Context.Process.ExePath != "" || evt.Context.Process.Comm != "new" {
+		t.Errorf("state from the previous connection leaked into a reconnected sandbox: %+v", evt.Context.Process)
+	}
+}
+
 func TestServerRejectsBadHandshakeOnly(t *testing.T) {
 	c := newCollector(16)
 	srv, stats := startServer(t, nil, c, fakeResolver{})

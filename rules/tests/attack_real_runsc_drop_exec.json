@@ -1,0 +1,8 @@
+{
+  "description": "Recorded from a real runsc release-20261012.0 sandbox (arm64, full profile): cp /bin/true /tmp/update && /tmp/update, a pipe into cat, cat /etc/passwd. Only exec-based rules are expected, so the result is the same when replayed on amd64.",
+  "expect": [
+    "gVisor Dropped Binary Executed From Temp Directory"
+  ],
+  "capture": "captures/runsc-release-20261012.0-arm64.cap",
+  "container_id": "runsc-815073"
+}

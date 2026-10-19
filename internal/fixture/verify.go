@@ -50,7 +50,7 @@ func Verify(fixtures []Fixture, falcoOutput io.Reader) ([]Result, error) {
 	}
 	results := make([]Result, 0, len(fixtures))
 	for _, f := range fixtures {
-		got := fired[f.ContainerID[:shortIDLen]]
+		got := fired[f.ContainerID[:min(len(f.ContainerID), shortIDLen)]]
 		res := Result{Fixture: f.Name}
 		for _, rule := range f.Expect {
 			if !slices.Contains(got, rule) {

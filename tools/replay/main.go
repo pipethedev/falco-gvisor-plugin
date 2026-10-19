@@ -3,6 +3,7 @@
 //
 //	replay send -socket /run/falco/gvisor.sock rules/tests/*.json
 //	replay verify -log falco.json rules/tests/*.json
+//	replay record -socket /run/falco/gvisor.sock -out capture.bin
 package main
 
 import (
@@ -11,6 +12,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"time"
 
 	"google.golang.org/protobuf/proto"
@@ -26,6 +28,11 @@ const (
 	ioTimeout           = 5 * time.Second
 	cmdSend             = "send"
 	cmdVerify           = "verify"
+	cmdRecord           = "record"
+	recordBufferSize    = 1 << 20
+	socketDirPerm       = 0o755
+	captureFilePerm     = 0o644
+	shortIDLen          = 12
 	exitUsage           = 2
 )
 
@@ -41,6 +48,8 @@ func main() {
 		err = runSend(os.Args[2:])
 	case cmdVerify:
 		err = runVerify(os.Args[2:])
+	case cmdRecord:
+		err = runRecord(os.Args[2:])
 	default:
 		usage()
 	}
@@ -51,7 +60,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: replay send -socket PATH FIXTURE... | replay verify -log FILE FIXTURE...")
+	fmt.Fprintln(os.Stderr, "usage: replay send -socket PATH FIXTURE... | replay verify -log FILE FIXTURE... | replay record -socket PATH -out FILE")
 	os.Exit(exitUsage)
 }
 
@@ -76,36 +85,37 @@ func runSend(args []string) error {
 		return err
 	}
 	for _, f := range fixtures {
-		if err := send(*socket, f); err != nil {
+		sent, err := send(*socket, f)
+		if err != nil {
 			return fmt.Errorf("%s: %w", f.Name, err)
 		}
-		fmt.Printf("sent %s (%d events, container %s)\n", f.Name, len(f.Events), f.ContainerID[:12])
+		fmt.Printf("sent %s (%d packets, container %s)\n", f.Name, sent, f.ContainerID[:min(len(f.ContainerID), shortIDLen)])
 	}
 	return nil
 }
 
-func send(socket string, f fixture.Fixture) error {
+func send(socket string, f fixture.Fixture) (int, error) {
 	packets, err := f.Packets()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	conn, err := net.DialUnix(networkUnixPacket, nil, &net.UnixAddr{Name: socket, Net: networkUnixPacket})
 	if err != nil {
-		return fmt.Errorf("dial %s: %w", socket, err)
+		return 0, fmt.Errorf("dial %s: %w", socket, err)
 	}
 	defer func() { _ = conn.Close() }()
 	if err := conn.SetDeadline(time.Now().Add(ioTimeout)); err != nil {
-		return err
+		return 0, err
 	}
 	if err := handshake(conn); err != nil {
-		return err
+		return 0, err
 	}
 	for _, pkt := range packets {
 		if _, err := conn.Write(pkt); err != nil {
-			return fmt.Errorf("write: %w", err)
+			return 0, fmt.Errorf("write: %w", err)
 		}
 	}
-	return nil
+	return len(packets), nil
 }
 
 func handshake(conn *net.UnixConn) error {
@@ -150,4 +160,61 @@ func runVerify(args []string) error {
 		return fmt.Errorf("%w: %d of %d", errFixturesFailed, failed, len(results))
 	}
 	return nil
+}
+
+// runRecord stands in for the plugin: it accepts one sandbox connection,
+// answers the handshake and writes every packet it receives to a capture
+// file until the sandbox disconnects.
+func runRecord(args []string) error {
+	fs := flag.NewFlagSet(cmdRecord, flag.ExitOnError)
+	socket := fs.String("socket", "/run/falco/gvisor.sock", "socket to listen on")
+	out := fs.String("out", "capture.bin", "capture file")
+	_ = fs.Parse(args)
+	if err := os.MkdirAll(filepath.Dir(*socket), socketDirPerm); err != nil {
+		return err
+	}
+	_ = os.Remove(*socket)
+	listener, err := net.ListenUnix(networkUnixPacket, &net.UnixAddr{Name: *socket, Net: networkUnixPacket})
+	if err != nil {
+		return fmt.Errorf("listen %s: %w", *socket, err)
+	}
+	defer func() { _ = listener.Close() }()
+	conn, err := listener.AcceptUnix()
+	if err != nil {
+		return fmt.Errorf("accept: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	buf := make([]byte, recordBufferSize)
+	if _, err := conn.Read(buf); err != nil {
+		return fmt.Errorf("read handshake: %w", err)
+	}
+	reply, err := proto.Marshal(&pb.Handshake{Version: wire.CurrentVersion})
+	if err != nil {
+		return err
+	}
+	if _, err := conn.Write(reply); err != nil {
+		return fmt.Errorf("write handshake: %w", err)
+	}
+
+	file, err := os.OpenFile(*out, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, captureFilePerm)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = file.Close() }()
+	if err := fixture.WriteCaptureHeader(file); err != nil {
+		return err
+	}
+	count := 0
+	for {
+		n, err := conn.Read(buf)
+		if err != nil || n == 0 {
+			fmt.Printf("recorded %d packets to %s\n", count, *out)
+			return nil
+		}
+		if err := fixture.WriteCapturedPacket(file, buf[:n]); err != nil {
+			return err
+		}
+		count++
+	}
 }

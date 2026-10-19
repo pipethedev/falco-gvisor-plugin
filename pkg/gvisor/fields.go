@@ -196,7 +196,7 @@ var fieldDefs = []FieldDef{
 	{Name: fieldGvisorANames, Type: typeString, IsList: true, Desc: "Names of all known ancestors, nearest first; use with intersects / in."},
 	field(fieldGvisorExitStatus, typeUint64, "Exit status for task_exit and exit_notify_parent points."),
 	field(fieldGvisorPrevUID, typeUint64, "setuid-family events: the effective uid the process had before the call. Absent if the process had not been seen before."),
-	field(fieldGvisorStdinPipeProc, typeString, "Name of the process writing to this process's stdin pipe at exec, e.g. curl in curl | sh (requires pipe_proc_info on sentry/execve)."),
+	field(fieldGvisorStdinPipeProc, typeString, "Name of the process writing to this process's stdin pipe at exec, e.g. curl in curl | sh. Set only if the writer is still running when the reader execs (gVisor inspects live siblings), and requires pipe_proc_info on sentry/execve."),
 
 	field(fieldStatsConnections, typeUint64, "gvisor_stats: live sandbox connections."),
 	field(fieldStatsEventsPerSecond, typeUint64, "gvisor_stats: events per second since the previous stats event."),

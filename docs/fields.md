@@ -112,7 +112,7 @@ Differences from Falco's syscall source:
 | `gvisor.anames` | list of string | Names of all known ancestors, nearest first; use with intersects / in. |
 | `gvisor.exit_status` | uint64 | Exit status for task_exit and exit_notify_parent points. |
 | `gvisor.prev_uid` | uint64 | setuid-family events: the effective uid the process had before the call. Absent if the process had not been seen before. |
-| `gvisor.stdin_pipe_proc` | string | Name of the process writing to this process's stdin pipe at exec, e.g. curl in curl \| sh (requires pipe_proc_info on sentry/execve). |
+| `gvisor.stdin_pipe_proc` | string | Name of the process writing to this process's stdin pipe at exec, e.g. curl in curl \| sh. Set only if the writer is still running when the reader execs (gVisor inspects live siblings), and requires pipe_proc_info on sentry/execve. |
 
 ## Stats (`evt.type = gvisor_stats`)
 

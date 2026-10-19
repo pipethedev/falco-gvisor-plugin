@@ -95,6 +95,10 @@ type Fixture struct {
 	Description string   `json:"description"`
 	Expect      []string `json:"expect"`
 	Events      []Event  `json:"events"`
+	// Capture names a file of packets recorded from a real sandbox
+	// (replay record), relative to the fixture; it replaces Events.
+	Capture          string `json:"capture"`
+	CaptureContainer string `json:"container_id"`
 
 	Name        string `json:"-"`
 	ContainerID string `json:"-"`
@@ -146,6 +150,11 @@ func Load(path string) (Fixture, error) {
 		return Fixture{}, fmt.Errorf("decode fixture %s: %w", path, err)
 	}
 	f.Name = strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+	if f.Capture != "" {
+		f.Capture = filepath.Join(filepath.Dir(path), f.Capture)
+		f.ContainerID = f.CaptureContainer
+		return f, nil
+	}
 	sum := sha256.Sum256([]byte(f.Name))
 	f.ContainerID = hex.EncodeToString(sum[:])
 	return f, nil
@@ -153,6 +162,14 @@ func Load(path string) (Fixture, error) {
 
 // Packets encodes the fixture as remote-sink messages.
 func (f Fixture) Packets() ([][]byte, error) {
+	if f.Capture != "" {
+		file, err := os.Open(f.Capture)
+		if err != nil {
+			return nil, fmt.Errorf("open capture: %w", err)
+		}
+		defer func() { _ = file.Close() }()
+		return ReadCapture(file)
+	}
 	packets := make([][]byte, 0, len(f.Events))
 	for i, e := range f.Events {
 		msgType, msg, err := e.message(f.ContainerID, baseTimeNs+int64(i)*stepNs)
