@@ -14,6 +14,8 @@ make generate          # syscall tables and docs/fields.md
 make lint
 ```
 
+The Go module path, `github.com/falcosecurity/plugins/plugins/gvisor`, is where the plugin will live once it is merged into the falcosecurity plugins repository, so it can't be fetched with `go get` from this repository; clone it and build locally.
+
 The plugin uses gVisor's own decoding packages (`points_go_proto` and the remote sink's `wire`) from the `gvisor.dev/gvisor` module's `go` branch; `go.mod` pins the exact version.
 
 ### Rule tests

@@ -79,7 +79,9 @@ If gVisor can't reach Falco (Falco is down, say), sandboxes still start normally
 
 ## Install with falcoctl
 
-Once a release is published:
+This plugin is being prepared for the [falcosecurity/plugins](https://github.com/falcosecurity/plugins) repository, and the index below lives there. Until it is merged, build it from source (`make image`, or `make build-linux` for the library).
+
+Once it is published:
 
 ```sh
 falcoctl index add gvisor https://raw.githubusercontent.com/falcosecurity/plugins/main/plugins/gvisor/deploy/falcoctl/index.yaml
