@@ -129,7 +129,7 @@ The lean profile traces `container/start`, `sentry/clone`, `sentry/execve` (with
   - drop-and-execute (temp-dir binaries from the upper layer, memfd, `curl | sh`)
   - reverse shells and persistence
   - credential access (cloud metadata, service account tokens, credential files)
-  - behaviour and stock-rule equivalents: binaries not from the image making outbound connections, non-root processes switching to root with `setuid`, and two rules disabled by default because they need tuning (terminal shell via exec session, unexpected outbound connections)
+  - behaviour and stock-rule equivalents: binaries not from the image making outbound connections, non-root processes switching to root with `setuid`, and rules disabled by default because they need tuning for each environment: terminal shell via exec session, unexpected outbound connections, cloud metadata access and service-account token reads (cloud SDKs and Kubernetes clients do the last two routinely)
 
   Each rule has an `*_allowlist` override macro, and generic shells and package managers do not alert. `rules/tools/pool_ips.sh` resolves mining pool domains into an IP macro.
 - Rule tests: `make rules-test` runs Falco 0.45 in Docker and replays the fixtures in [`rules/tests`](rules/tests) into the plugin as a fake sandbox. Each attack fixture must fire exactly its expected rules, and the benign Node, Python, Go, nginx and exec-session workloads must fire none.

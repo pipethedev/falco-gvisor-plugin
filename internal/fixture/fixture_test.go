@@ -17,6 +17,11 @@ func TestRepositoryFixturesEncode(t *testing.T) {
 	if err != nil || len(paths) == 0 {
 		t.Fatalf("no fixtures found: %v", err)
 	}
+	defaults, err := filepath.Glob(filepath.Join(rulesTestsDir, "defaults", "*.json"))
+	if err != nil || len(defaults) == 0 {
+		t.Fatalf("no default-rules fixtures found: %v", err)
+	}
+	paths = append(paths, defaults...)
 	ids := map[string]string{}
 	for _, path := range paths {
 		f, err := Load(path)

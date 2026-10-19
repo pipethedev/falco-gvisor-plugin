@@ -457,6 +457,8 @@
 
 - rule: gVisor Connection to Cloud Metadata Service
   desc: >
+    Disabled by default: cloud SDKs contact the metadata service routinely; enable it with an
+    allowlist for your workloads.
     A process connected to a cloud instance metadata endpoint, which can expose node or workload
     credentials. Cloud SDKs do this legitimately when they fetch instance credentials; allowlist
     those workloads, for example with
@@ -471,6 +473,7 @@
     id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: NOTICE
   source: gvisor
+  enabled: false
   tags: [gvisor, container, network, mitre_credential_access, T1552.005]
 
 - macro: gvisor_sa_token_allowlist
@@ -478,6 +481,8 @@
 
 - rule: gVisor Service Account Token Read
   desc: >
+    Disabled by default: Kubernetes clients read their token routinely; enable it with an
+    allowlist for your workloads.
     A Kubernetes or cloud workload identity token was read. Expected for API clients;
     allowlist them via gvisor_sa_token_allowlist. Requires the full profile.
   condition: >
@@ -490,6 +495,7 @@
     k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: NOTICE
   source: gvisor
+  enabled: false
   tags: [gvisor, container, mitre_credential_access, T1528]
 
 # ---------------------------------------------------------------------------
