@@ -139,14 +139,14 @@ The lean profile traces `container/start`, `sentry/clone`, `sentry/execve` (with
 ## Validation status
 
 - **Unit tests** pass with the race detector on macOS, Linux arm64 and Linux amd64 (amd64 under emulation). golangci-lint is clean and the decoders are fuzzed.
-- **Rules:** every fixture, plus the health check, passes against Falco 0.45.0 on arm64 and amd64 (`make rules-test`). That's 35 checks, including traffic recorded from a real runsc sandbox (`rules/tests/captures/`).
+- **Rules:** every fixture, plus the health check, passes against Falco 0.45.0 on arm64 and amd64 (`make rules-test`). That's 38 checks, including traffic recorded from a real runsc sandbox (`rules/tests/captures/`) and a pass with the shipped rule selection that must stay silent on routine pod behaviour.
 - **gVisor runsc release-20261012.0** (arm64, systrap) runs against the plugin in `make test-gvisor`, also a CI job. It checks that:
   - a sandbox with monitoring enabled starts while nothing listens
   - the plugin attaches an unmonitored sandbox
   - binaries dropped on the `/tmp` tmpfs and in `/dev/shm` are detected
   - sandboxes are re-attached after a Falco rules reload
 
-  Running real sandboxes found the `Default` session requirement, `proc.name` for symlinked binaries, and the `/tmp` tmpfs behaviour.
+  The same checks pass with `requireRunscPeer` enabled. Running real sandboxes found the `Default` session requirement, `proc.name` for symlinked binaries, and the `/tmp` tmpfs behaviour.
 - **Packaging:** the release's falcoctl commands were rehearsed against a local OCI registry. `falcoctl artifact install gvisor-rules` resolves the plugin dependency for both `linux/amd64` and `linux/arm64`.
 - **Not yet run:** the Docker-runtime and Kubernetes integration tests (`test/integration/run.sh`), the end-to-end benchmarks (`docs/perf.md`; microbenchmarks are recorded there), runsc on amd64, and the CRI metadata provider against a real containerd.
 
