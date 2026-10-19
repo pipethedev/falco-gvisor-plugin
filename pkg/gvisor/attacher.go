@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
 	"sync"
 	"sync/atomic"
@@ -76,6 +77,10 @@ type Attacher struct {
 	// reliably; under Docker any user can set annotations.
 	podAnnotations bool
 
+	// rootMissing records that the last sweep found no runsc state root,
+	// so the warning is logged once until it appears.
+	rootMissing bool
+
 	mu       sync.Mutex
 	attached map[int32]*attachBinding
 }
@@ -121,6 +126,7 @@ func (a *Attacher) Run(ctx context.Context, attachNow bool, interval time.Durati
 // Sweep lists running sandboxes and attaches every one without a live
 // connection. Failures are logged and counted, never returned.
 func (a *Attacher) Sweep(ctx context.Context) {
+	a.warnMissingRoot()
 	sandboxes, err := a.listSandboxes(ctx)
 	if err != nil {
 		a.stats.AttacherFailed.Store(true)
@@ -206,6 +212,20 @@ func (a *Attacher) hasPendingConnection(now, listedAt time.Time) bool {
 		}
 	}
 	return false
+}
+
+// warnMissingRoot logs when the runsc state root does not exist: runsc then
+// lists no sandboxes instead of failing, so a runscRoot that does not match
+// the runtime (the Docker default on a containerd host) would otherwise go
+// unnoticed. It is a warning, not a failure, because a host that has not
+// run a sandbox yet may have no root either.
+func (a *Attacher) warnMissingRoot() {
+	_, err := os.Stat(a.runscRoot)
+	missing := err != nil
+	if missing && !a.rootMissing {
+		logger.Printf("attacher: runsc state root: %v; sandboxes running elsewhere are not found, check runscRoot", err)
+	}
+	a.rootMissing = missing
 }
 
 func (a *Attacher) listSandboxes(ctx context.Context) (sandboxSet, error) {

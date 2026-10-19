@@ -1,8 +1,10 @@
 package gvisor
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strings"
@@ -368,5 +370,26 @@ func TestAttacherSweepNotHeldOffByChurn(t *testing.T) {
 	}
 	if got := runner.attached(); !slices.Equal(got, []string{"aaa"}) {
 		t.Errorf("attached %v, want [aaa]", got)
+	}
+}
+
+func TestAttacherWarnsOnceAboutMissingRoot(t *testing.T) {
+	var out bytes.Buffer
+	prev := logger.Writer()
+	logger.SetOutput(&out)
+	t.Cleanup(func() { logger.SetOutput(prev) })
+
+	a, _ := newTestAttacher(&fakeRunner{list: `[]`}, &fakeConns{})
+	a.runscRoot = filepath.Join(t.TempDir(), "missing")
+	a.Sweep(context.Background())
+	a.Sweep(context.Background())
+	if n := strings.Count(out.String(), "check runscRoot"); n != 1 {
+		t.Errorf("missing root warned %d times over two sweeps, want 1:\n%s", n, out.String())
+	}
+	out.Reset()
+	a.runscRoot = t.TempDir()
+	a.Sweep(context.Background())
+	if strings.Contains(out.String(), "check runscRoot") {
+		t.Errorf("warned about a root that exists:\n%s", out.String())
 	}
 }

@@ -72,7 +72,7 @@ New containers are monitored at creation. Existing ones are attached by the plug
 |---|---|
 | `connections` above 0 but no events | The session is not named `Default`: runsc logs `unable to configure event session: only a single "Default" session is supported` while the sink stays connected. Use the shipped session files. |
 | `connections=0` but sandboxes run | Socket path in the session `endpoint` must equal `socketPath`; `/run/falco` must be a host mount. runsc logs `Ignoring sink setup failure` when it cannot connect (by design the container still starts). |
-| New sandboxes monitored, old ones not | The attacher needs runsc and the state root: look for `attacher:` / `attach sandbox` errors and `attach_failures` in stats. Verify `runscRoot`. |
+| New sandboxes monitored, old ones not | The attacher needs runsc and the state root: look for `attacher:` / `attach sandbox` errors and `attach_failures` in stats. Verify `runscRoot`: runsc lists no sandboxes, without an error, for a directory that doesn't exist, so the plugin logs `attacher: runsc state root: ... check runscRoot` instead. |
 | Attach fails with permission errors | Run Falco as root with host PID; mount the state root read-write. |
 | `container.name` empty | Metadata is fetched asynchronously, so the first events of a new container have none. If it stays empty, check the `container metadata for ...` log lines and the runtime socket mount. Use `metadataProvider: cri` under Kubernetes. |
 | `drops_channel_full` grows | Falco is not consuming fast enough: reduce the traced points, check Falco CPU and output back-pressure (slow http outputs). |
