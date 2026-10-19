@@ -10,6 +10,9 @@ import (
 const (
 	statsOwner = 0
 	compactMin = 1024
+	// statsReserve is room beyond maxBytes kept for gvisor_stats events, so
+	// the event reporting drops is not itself dropped by a full queue.
+	statsReserve = 64 << 10
 )
 
 var (
@@ -71,7 +74,11 @@ func (q *eventQueue) push(owner uint64, data []byte, ts time.Time) error {
 	if q.closed {
 		return ErrSourceClosed
 	}
-	if q.bytes+len(data) > q.maxBytes {
+	limit := q.maxBytes
+	if owner == statsOwner {
+		limit += statsReserve
+	}
+	if q.bytes+len(data) > limit {
 		return ErrQueueFull
 	}
 	if owner != statsOwner && q.ownerBytes[owner]+len(data) > q.share() {

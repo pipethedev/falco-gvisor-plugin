@@ -144,3 +144,24 @@ func TestQueueStaysBoundedWhileNeverEmpty(t *testing.T) {
 		t.Errorf("backing array grew to %d slots for a live depth of %d", cap(q.items), depth)
 	}
 }
+
+func TestQueueStatsFitWhenFull(t *testing.T) {
+	q := newEventQueue(64, 1, &Stats{})
+	if err := q.push(ownerA, make([]byte, 64), time.Unix(1, 0)); err != nil {
+		t.Fatal(err)
+	}
+	if err := q.push(ownerA, make([]byte, 1), time.Unix(2, 0)); !errors.Is(err, ErrQueueFull) {
+		t.Fatalf("data push into a full queue: %v", err)
+	}
+	if err := q.push(statsOwner, make([]byte, 512), time.Unix(3, 0)); err != nil {
+		t.Fatalf("stats event refused by a queue full of data: %v", err)
+	}
+	if err := q.push(statsOwner, make([]byte, statsReserve), time.Unix(4, 0)); !errors.Is(err, ErrQueueFull) {
+		t.Errorf("stats events must stay within their reserve: %v", err)
+	}
+	for _, want := range []int64{1, 3} {
+		if evt, ok, err := q.tryPop(); !ok || err != nil || evt.Time.Unix() != want {
+			t.Fatalf("pop = %v, %v, %v; want event %d", evt.Time.Unix(), ok, err, want)
+		}
+	}
+}
