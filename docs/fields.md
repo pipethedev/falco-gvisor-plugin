@@ -60,7 +60,7 @@ Differences from Falco's syscall source:
 | `fd.sport` | uint64 | Server port. |
 | `fd.rip` | ipaddr | Remote IP: the connect target or the accepted peer. |
 | `fd.rport` | uint64 | Remote port. |
-| `fd.l4proto` | string | tcp, udp or raw when the socket type is known: on socket and listen, and on connect when the socket() call that created the fd was seen. |
+| `fd.l4proto` | string | tcp, udp or raw for IPv4 and IPv6 sockets whose type is known: on socket and listen, and on connect when the socket() call that created the fd was seen. Absent for other families (Unix, netlink, packet) and when the type is unknown. |
 
 ## Process and user
 

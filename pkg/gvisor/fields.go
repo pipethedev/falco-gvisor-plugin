@@ -158,7 +158,7 @@ var fieldDefs = []FieldDef{
 	field(fieldFDSPort, typeUint64, "Server port."),
 	field(fieldFDRIP, typeIPAddr, "Remote IP: the connect target or the accepted peer."),
 	field(fieldFDRPort, typeUint64, "Remote port."),
-	field(fieldFDL4Proto, typeString, "tcp, udp or raw when the socket type is known: on socket and listen, and on connect when the socket() call that created the fd was seen."),
+	field(fieldFDL4Proto, typeString, "tcp, udp or raw for IPv4 and IPv6 sockets whose type is known: on socket and listen, and on connect when the socket() call that created the fd was seen. Absent for other families (Unix, netlink, packet) and when the type is unknown."),
 
 	field(fieldProcPid, typeUint64, "Thread-group id inside the sandbox."),
 	field(fieldProcPpid, typeUint64, "Parent thread-group id inside the sandbox."),

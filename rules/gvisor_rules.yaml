@@ -336,7 +336,10 @@
   condition: >
     (((proc.exepath startswith /tmp/ or proc.exepath startswith /var/tmp/ or proc.exepath startswith /dev/shm/)
       and (proc.is_exe_upper_layer = true or proc.is_exe_lower_layer = false))
-     or (proc.exepath startswith /dev/fd/ and proc.is_exe_lower_layer = false))
+     or (proc.exepath startswith /dev/fd/ and proc.is_exe_lower_layer = false)
+     or (gvisor.is_exec_fallback = true
+         and (proc.exepath startswith /tmp/ or proc.exepath startswith /var/tmp/
+              or proc.exepath startswith /dev/shm/ or proc.exepath startswith /dev/fd/)))
 
 - macro: gvisor_drop_exec_allowlist
   condition: (gvisor_never_true)
@@ -345,7 +348,9 @@
   desc: >
     A binary written at runtime (not shipped in the container image) was executed from /tmp,
     /var/tmp or /dev/shm, or through a file descriptor (fexecve, execveat with an empty path),
-    for which gVisor reports only /dev/fd/N as the path.
+    for which gVisor reports only /dev/fd/N as the path. When gVisor dropped the exec's
+    sentry/execve point (gvisor.is_exec_fallback), the image layer is unknown, so any exec from
+    those locations is reported.
   condition: >
     gvisor_exec and gvisor_tmp_dropped_exec
     and not gvisor_drop_exec_allowlist

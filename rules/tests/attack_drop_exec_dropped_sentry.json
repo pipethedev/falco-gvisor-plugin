@@ -1,0 +1,42 @@
+{
+  "description": "gVisor dropped the sentry/execve point of a binary run from /tmp. Only the exec's syscall exit arrived (under the shell's name); the process's next event shows the task renamed, confirming the exec. The layer is unknown, so the location alone raises the alert.",
+  "expect": [
+    "gVisor Dropped Binary Executed From Temp Directory"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/clone",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "child": 2
+    },
+    {
+      "point": "syscall/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "sh",
+      "exe": "/tmp/update",
+      "argv": [
+        "/tmp/update"
+      ]
+    },
+    {
+      "point": "sentry/task_exit",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "update"
+    }
+  ]
+}
