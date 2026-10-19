@@ -54,6 +54,9 @@ plugins:
       attachIntervalSeconds: ${ATTACH_INTERVAL}
       statsIntervalSeconds: 5
 load_plugins: [gvisor]
+rules:
+  - enable:
+      rule: gVisor Connection to Cloud Metadata Service
 json_output: true
 json_include_output_property: true
 EOF
@@ -75,7 +78,7 @@ start_falco() {
     -v "${WORK}/gvisor.yaml:/etc/falco/config.d/gvisor.yaml:ro" \
     "${IMAGE}" falco ${FALCO_EXTRA_ARGS} >/dev/null
   for _ in $(seq "${STARTUP_TIMEOUT}"); do
-    if docker logs "${FALCO}" 2>&1 | grep -q "listening on /run/falco/gvisor.sock"; then
+    if docker logs "${FALCO}" 2>&1 | grep "listening on /run/falco/gvisor.sock" >/dev/null; then
       return 0
     fi
     sleep 1
@@ -94,7 +97,7 @@ stop_falco() {
 wait_alert() {
   local rule="$1" name="$2"
   for _ in $(seq "${ALERT_TIMEOUT}"); do
-    if docker logs "${FALCO}" 2>/dev/null | grep -F "\"rule\":\"${rule}\"" | grep -qF "\"container.name\":\"${name}\""; then
+    if docker logs "${FALCO}" 2>/dev/null | grep -F "\"rule\":\"${rule}\"" | grep -F "\"container.name\":\"${name}\"" >/dev/null; then
       return 0
     fi
     sleep 1
@@ -162,7 +165,7 @@ scenario_reattach() {
   sleep 2
   docker restart -t 10 "${FALCO}" >/dev/null
   for _ in $(seq "${STARTUP_TIMEOUT}"); do
-    docker logs --since 30s "${FALCO}" 2>&1 | grep -q "attached trace session" && break
+    docker logs --since 30s "${FALCO}" 2>&1 | grep "attached trace session" >/dev/null && break
     sleep 1
   done
   docker exec "${PREFIX}-longrun" sh -c 'cp /bin/busybox /tmp/xmrig && /tmp/xmrig --donate-level 1 true' || true
@@ -202,7 +205,7 @@ scenario_restart_under_load() {
     fail "workload exited ${status}: ${output}"
   fi
   sleep 6
-  if docker logs "${FALCO}" 2>&1 | grep -q 'gvisor-plugin\] stats: .*drops='; then
+  if docker logs "${FALCO}" 2>&1 | grep 'gvisor-plugin] stats: .*drops=' >/dev/null; then
     pass "drops reported in stats"
   else
     fail "no stats line with drop counters"

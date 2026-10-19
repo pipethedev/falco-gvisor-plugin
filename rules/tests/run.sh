@@ -53,10 +53,10 @@ start_falco() {
     -v "${config}:/etc/falco/falco.yaml:ro" \
     "${FALCO_IMAGE}" falco -c /etc/falco/falco.yaml --disable-source=syscall >/dev/null
   for _ in $(seq "${STARTUP_TIMEOUT}"); do
-    if docker logs "${NAME}" 2>&1 | grep -q "listening on"; then
+    if docker logs "${NAME}" 2>&1 | grep "listening on" >/dev/null; then
       return 0
     fi
-    if ! docker inspect -f '{{.State.Running}}' "${NAME}" | grep -q true; then
+    if ! docker inspect -f '{{.State.Running}}' "${NAME}" | grep true >/dev/null; then
       docker logs "${NAME}"
       echo "falco exited during startup" >&2
       exit 1
@@ -123,7 +123,7 @@ docker run -d --name "${NAME}" \
   -v "${WORK}/health.yaml:/etc/falco/falco.yaml:ro" \
   "${FALCO_IMAGE}" falco -c /etc/falco/falco.yaml --disable-source=syscall >/dev/null
 for _ in $(seq "${STARTUP_TIMEOUT}"); do
-  if docker logs "${NAME}" 2>/dev/null | grep -q '"rule":"gVisor Sandboxes Not Monitored"'; then
+  if docker logs "${NAME}" 2>/dev/null | grep '"rule":"gVisor Sandboxes Not Monitored"' >/dev/null; then
     echo "PASS health_attacher_unreachable"
     exit 0
   fi

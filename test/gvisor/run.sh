@@ -82,7 +82,7 @@ falco_log() {
 wait_alert() {
   local rule="$1" text="$2"
   for _ in $(seq "${ALERT_TIMEOUT}"); do
-    if falco_log | grep -F "\"rule\":\"${rule}\"" | grep -qF "${text}"; then
+    if falco_log | grep -F "\"rule\":\"${rule}\"" | grep -F "${text}" >/dev/null; then
       return 0
     fi
     sleep 1
@@ -122,7 +122,7 @@ fi
 
 docker exec -d "${NAME}" sh -c 'exec falco -c /etc/falco/falco.yaml --disable-source=syscall > /work/falco.log 2>&1'
 for _ in $(seq "${STARTUP_TIMEOUT}"); do
-  falco_log | grep -q "listening on" && break
+  falco_log | grep "listening on" >/dev/null && break
   sleep 1
 done
 
