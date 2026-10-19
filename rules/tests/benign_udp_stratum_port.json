@@ -1,0 +1,45 @@
+{
+  "description": "A UDP socket to a port in the stratum list (for example a game server or metrics on 3333) is not a mining pool connection.",
+  "expect": [],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "app",
+      "exe": "/app/server",
+      "argv": [
+        "/app/server"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "syscall/socket",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "server",
+      "domain": "AF_INET",
+      "type": "SOCK_DGRAM",
+      "fd": 5
+    },
+    {
+      "point": "syscall/connect",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "server",
+      "addr": "10.0.0.9:3333",
+      "fd": 5
+    }
+  ]
+}

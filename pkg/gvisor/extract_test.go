@@ -188,6 +188,38 @@ func TestExtractOpenPathIsNeitherReadNorWrite(t *testing.T) {
 	}
 }
 
+func TestExtractConnectL4FromTrackedSocket(t *testing.T) {
+	table := NewProcessTable(defaultMaxTrackedProcess)
+	table.Apply(execPoint(t, 1, 0, "/bin/sh", "sh"))
+	table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_SOCKET, &pb.Socket{ContextData: testContext(1, 0, "sh"), Exit: &pb.Exit{Result: 7}, Domain: linux.AF_INET, Type: int32(linux.SOCK_STREAM)}))
+	table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_SOCKET, &pb.Socket{ContextData: testContext(1, 0, "sh"), Exit: &pb.Exit{Result: 8}, Domain: linux.AF_INET, Type: int32(linux.SOCK_DGRAM)}))
+	table.Apply(clonePoint(t, 1, 0, 2, "sh"))
+	connect := func(pid int32, fd int64) any {
+		p := mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{ContextData: testContext(pid, 1, "sh"), Exit: &pb.Exit{}, Fd: fd, Address: sockaddrIPv4(net.IPv4(10, 0, 0, 1), 3333)})
+		data, err := EncodeEvent(EventContext{Snapshot: table.Apply(p)}, p.Raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		evt, err := DecodeEvent(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return get(t, &evt, fieldFDL4Proto)
+	}
+	if got := connect(1, 7); got != "tcp" {
+		t.Errorf("connect on a TCP socket: l4proto = %v", got)
+	}
+	if got := connect(1, 8); got != "udp" {
+		t.Errorf("connect on a UDP socket: l4proto = %v", got)
+	}
+	if got := connect(2, 7); got != "tcp" {
+		t.Errorf("a forked child's inherited socket lost its protocol: %v", got)
+	}
+	if got := connect(1, 99); got != nil {
+		t.Errorf("connect on an untracked fd must leave l4proto unknown, got %v", got)
+	}
+}
+
 func TestExtractSocketAndPtrace(t *testing.T) {
 	evt := eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SOCKET, &pb.Socket{
 		ContextData: testContext(42, 1, "nmap"), Exit: &pb.Exit{Result: 3},

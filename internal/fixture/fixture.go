@@ -133,6 +133,7 @@ type Event struct {
 	Type    string `json:"type"`
 	Request string `json:"request"`
 	Errno   int64  `json:"errno"`
+	Fd      int64  `json:"fd"`
 	ID      uint32 `json:"id"`
 	RID     uint32 `json:"rid"`
 	EID     uint32 `json:"eid"`
@@ -207,6 +208,9 @@ func (e Event) context(containerID string, timeNs int64) *pb.ContextData {
 func (e Event) message(containerID string, timeNs int64) (pb.MessageType, proto.Message, error) {
 	ctx := e.context(containerID, timeNs)
 	exit := &pb.Exit{Errorno: e.Errno}
+	if e.Point == pointSocket {
+		exit.Result = e.Fd
+	}
 	switch e.Point {
 	case pointStart:
 		return pb.MessageType_MESSAGE_CONTAINER_START, &pb.Start{ContextData: ctx, Id: containerID, Args: e.Argv, Cwd: ctx.Cwd}, nil
@@ -222,7 +226,7 @@ func (e Event) message(containerID string, timeNs int64) (pb.MessageType, proto.
 			return 0, nil, err
 		}
 		return syscallMsg(pb.MessageType_MESSAGE_SYSCALL_CONNECT, "connect", func(nr uint64) proto.Message {
-			return &pb.Connect{ContextData: ctx, Exit: exit, Sysno: nr, Address: addr}
+			return &pb.Connect{ContextData: ctx, Exit: exit, Sysno: nr, Fd: e.Fd, Address: addr}
 		})
 	case pointOpenat:
 		flags, err := parseFlags(e.Flags)

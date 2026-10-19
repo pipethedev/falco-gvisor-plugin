@@ -2,12 +2,16 @@ package gvisor
 
 import (
 	"container/list"
+	"maps"
 	"slices"
 
 	pb "gvisor.dev/gvisor/pkg/sentry/seccheck/points/points_go_proto"
 )
 
-const maxAncestors = 8
+const (
+	maxAncestors      = 8
+	maxTrackedSockets = 256
+)
 
 // Snapshot is the process context attached to one event: the acting process
 // and up to maxAncestors of its ancestors, nearest first.
@@ -17,6 +21,9 @@ type Snapshot struct {
 	// PrevUID is the effective uid before a credential-changing syscall,
 	// set only on setuid-family events for processes seen before.
 	PrevUID *uint32 `json:"prevuid,omitempty"`
+	// L4 is the transport protocol of the socket a connect used, when the
+	// socket() call that created it was seen.
+	L4 string `json:"l4,omitempty"`
 }
 
 // ProcessTable tracks the processes of one sandbox, keyed by thread-group id.
@@ -25,6 +32,7 @@ type ProcessTable struct {
 	limit   int
 	entries map[int32]*list.Element
 	lru     *list.List
+	sockets map[int32]map[int64]string
 }
 
 // NewProcessTable returns a table holding at most limit processes.
@@ -33,6 +41,7 @@ func NewProcessTable(limit int) *ProcessTable {
 		limit:   limit,
 		entries: make(map[int32]*list.Element),
 		lru:     list.New(),
+		sockets: make(map[int32]map[int64]string),
 	}
 }
 
@@ -51,6 +60,7 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 	proc := t.upsert(ctx.GetThreadGroupId())
 	if start := ctx.GetThreadGroupStartTimeNs(); start != 0 && proc.StartTimeNs != 0 && start != proc.StartTimeNs {
 		*proc = ProcessInfo{Pid: proc.Pid}
+		delete(t.sockets, proc.Pid)
 	}
 	var prevUID *uint32
 	if isCredentialChange(p.Msg) && proc.HasCreds {
@@ -70,10 +80,17 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 		}
 	case *pb.CloneInfo:
 		t.applyClone(proc, m)
+	case *pb.Socket:
+		if exit := m.GetExit(); exit != nil && exit.GetErrorno() == 0 && exit.GetResult() >= 0 {
+			t.recordSocket(proc.Pid, exit.GetResult(), l4ProtoOf(m.GetType()))
+		}
 	}
 
 	snap := t.snapshot(proc)
 	snap.PrevUID = prevUID
+	if c, ok := p.Msg.(*pb.Connect); ok {
+		snap.L4 = t.sockets[proc.Pid][c.GetFd()]
+	}
 	if exit, ok := p.Msg.(*pb.TaskExit); ok && isThreadGroupLeader(exit.GetContextData()) {
 		t.remove(proc.Pid)
 	}
@@ -90,6 +107,9 @@ func (t *ProcessTable) applyClone(parent *ProcessInfo, info *pb.CloneInfo) {
 	created.Ppid = parent.Pid
 	created.StartTimeNs = info.GetCreatedThreadStartTimeNs()
 	*t.upsert(child) = created
+	if inherited := t.sockets[parent.Pid]; len(inherited) > 0 {
+		t.sockets[child] = maps.Clone(inherited)
+	}
 }
 
 func (t *ProcessTable) upsert(pid int32) *ProcessInfo {
@@ -118,6 +138,22 @@ func (t *ProcessTable) remove(pid int32) {
 		t.lru.Remove(elem)
 		delete(t.entries, pid)
 	}
+	delete(t.sockets, pid)
+}
+
+// recordSocket remembers the transport protocol of a socket fd, so a later
+// connect on it can report fd.l4proto. Each process keeps at most
+// maxTrackedSockets entries.
+func (t *ProcessTable) recordSocket(pid int32, fd int64, l4 string) {
+	fds := t.sockets[pid]
+	if fds == nil {
+		fds = make(map[int64]string)
+		t.sockets[pid] = fds
+	}
+	if _, known := fds[fd]; !known && len(fds) >= maxTrackedSockets {
+		return
+	}
+	fds[fd] = l4
 }
 
 func (t *ProcessTable) evictOldest() {

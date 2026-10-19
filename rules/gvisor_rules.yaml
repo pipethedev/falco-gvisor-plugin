@@ -135,7 +135,7 @@
 - rule: gVisor Connection to Mining Pool Port
   desc: Outbound connection to a port commonly used by stratum mining pools.
   condition: >
-    gvisor_connect and fd.rport in (gvisor_stratum_ports)
+    gvisor_connect and fd.rport in (gvisor_stratum_ports) and not fd.l4proto = udp
     and not gvisor_mining_allowlist
   output: >
     Connection to mining pool port from gVisor sandbox (connection=%fd.name proc=%proc.name
@@ -215,7 +215,7 @@
 - rule: gVisor Outbound SMTP From Non-Mail Workload
   desc: A workload that is not a mail server connected to an SMTP port, a common sign of spam relaying or exfiltration.
   condition: >
-    gvisor_connect and fd.rport in (gvisor_smtp_ports)
+    gvisor_connect and fd.rport in (gvisor_smtp_ports) and not fd.l4proto = udp
     and not gvisor_mail_server_workloads
   output: >
     Outbound SMTP from gVisor sandbox (connection=%fd.name proc=%proc.name cmdline=%proc.cmdline

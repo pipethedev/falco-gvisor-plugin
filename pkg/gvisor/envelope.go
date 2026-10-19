@@ -90,6 +90,9 @@ func DecodeEvent(data []byte) (Event, error) {
 		point.Arch = ctx.Arch
 	}
 	fd, fdOK := fdViewOf(point)
+	if fd.l4proto == "" {
+		fd.l4proto = ctx.L4
+	}
 	return Event{Context: ctx, Point: point, fd: fd, fdOK: fdOK}, nil
 }
 
