@@ -16,6 +16,7 @@ const (
 	ptsPrefix         = "/dev/pts/"
 	ttyPrefix         = "/dev/tty"
 	consolePath       = "/dev/console"
+	fdPathPrefix      = "/dev/fd/"
 	ptsMajor          = 136
 	devMinorBits      = 8
 	devMinorLowMask   = 0xff
@@ -62,18 +63,38 @@ type ProcessInfo struct {
 	// pending is the exec announced by the latest execve/execveat exit,
 	// until the process's next event shows whether it happened.
 	pending *pendingExec
+	// threads counts the group's other threads whose creation was seen and
+	// whose exit was not, so a leader exit can tell whether the group lives on.
+	threads int
 }
 
 // pendingExec is an exec whose syscall exit was seen. gVisor reports that
 // exit as successful before it loads the new image, so it only says the
 // exec started: loading can still fail (a missing file during a PATH
-// search, a bad binary). comm is the name gVisor gives the task if the
-// image loads.
+// search, a bad binary). While the image loads, other threads of the
+// process keep running under their old names; they are killed only after
+// the sentry/execve point is sent, and the exec'ing thread is renamed after
+// that.
 type pendingExec struct {
 	invoked string
 	argv    []string
-	comm    string
+	// comm is the name gVisor gives the task when the file is a binary:
+	// the base name of the path, or the fd number for an fd-only execveat.
+	// A script gets its interpreter's name instead.
+	comm string
+	// tid and oldComm identify the exec'ing thread and its name at the exit.
+	tid     int32
+	oldComm string
 }
+
+// execOutcome is what a later event shows about a pending exec.
+type execOutcome int
+
+const (
+	execUnknown execOutcome = iota
+	execHappened
+	execFailed
+)
 
 // Exe returns argv[0], or the exe path when argv is unknown.
 func (p ProcessInfo) Exe() string {
@@ -124,6 +145,7 @@ func (p *ProcessInfo) applyContext(ctx *pb.ContextData) {
 }
 
 func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
+	p.threads = 0
 	p.ExePath = info.GetBinaryPath()
 	p.InvokedPath = resolvePath(invokedPath(info), linux.AT_FDCWD, "", p.Cwd)
 	p.Argv = budgetArgv(info.GetArgv())
@@ -141,36 +163,52 @@ func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
 }
 
 // applySyscallExec records the exec announced by an execve/execveat exit
-// without changing the row: whether it happened is only known from the
-// process's next event (see ProcessTable.Apply).
-func (p *ProcessInfo) applySyscallExec(m *pb.Execve) {
+// without changing the row: whether it happened is only known from a later
+// event (see resolve).
+func (p *ProcessInfo) applySyscallExec(m *pb.Execve, ctx *pb.ContextData) {
 	name := m.GetPathname()
+	invoked := resolvePath(name, m.GetFd(), m.GetFdPath(), p.Cwd)
 	if name == "" {
 		name = strconv.FormatInt(m.GetFd(), 10)
+		invoked = m.GetFdPath()
+		if invoked == "" {
+			invoked = fdPathPrefix + name
+		}
 	}
 	p.pending = &pendingExec{
-		invoked: resolvePath(m.GetPathname(), m.GetFd(), m.GetFdPath(), p.Cwd),
+		invoked: invoked,
 		argv:    budgetArgv(m.GetArgv()),
 		comm:    truncateComm(path.Base(name)),
+		tid:     ctx.GetThreadId(),
+		oldComm: ctx.GetProcessName(),
 	}
 }
 
-// confirms reports whether an event whose context names the task comm
-// shows that the pending exec replaced the process: gVisor renamed the task
-// to the new program. An exec of a program with the same name cannot be
-// told apart from a failed one, so it is never confirmed.
-func (e *pendingExec) confirms(previousComm, comm string) bool {
-	return e.comm != "" && comm == e.comm && previousComm != e.comm
+// resolve reports what an event from thread tid named comm shows about the
+// exec. The task carrying the new binary's name, or the exec'ing thread
+// itself renamed (a script, named after its interpreter), shows it
+// happened; the exec'ing thread carrying on under its old name shows it
+// failed (an exec of a program with the same name looks the same and is not
+// confirmed). Events from other threads under other names say nothing.
+func (e *pendingExec) resolve(tid int32, comm string) execOutcome {
+	switch {
+	case comm == "":
+		return execUnknown
+	case comm == e.comm && comm != e.oldComm:
+		return execHappened
+	case tid != e.tid:
+		return execUnknown
+	case comm != e.oldComm:
+		return execHappened
+	default:
+		return execFailed
+	}
 }
 
 // commitExec moves the row to a confirmed exec whose sentry/execve point was
 // lost. Binary-level details (layer flags, hash, stdio) only come with that
 // point, so they are left unknown.
-func (p *ProcessInfo) commitExec(e *pendingExec) {
-	exe := e.invoked
-	if exe == "" {
-		exe = e.comm
-	}
+func (p *ProcessInfo) commitExec(e *pendingExec, comm string) {
 	*p = ProcessInfo{
 		Pid:           p.Pid,
 		Ppid:          p.Ppid,
@@ -181,10 +219,10 @@ func (p *ProcessInfo) commitExec(e *pendingExec) {
 		StartTimeNs:   p.StartTimeNs,
 		IsExecSession: p.IsExecSession,
 		TTY:           p.TTY,
-		ExePath:       exe,
+		ExePath:       e.invoked,
 		InvokedPath:   e.invoked,
 		Argv:          e.argv,
-		Comm:          e.comm,
+		Comm:          comm,
 	}
 }
 
@@ -212,6 +250,7 @@ func (p *ProcessInfo) applyStart(start *pb.Start) {
 func (p ProcessInfo) clone() ProcessInfo {
 	c := p
 	c.pending = nil
+	c.threads = 0
 	c.Argv = append([]string(nil), p.Argv...)
 	return c
 }

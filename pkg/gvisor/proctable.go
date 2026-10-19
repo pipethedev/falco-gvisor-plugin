@@ -74,9 +74,12 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 	_, sentryExec := p.Msg.(*pb.ExecveInfo)
 	execFallback := false
 	if pending := proc.pending; pending != nil {
-		proc.pending = nil
-		if !sentryExec && pending.confirms(proc.Comm, ctx.GetProcessName()) {
-			proc.commitExec(pending)
+		switch outcome := pending.resolve(ctx.GetThreadId(), ctx.GetProcessName()); {
+		case sentryExec || outcome == execFailed:
+			proc.pending = nil
+		case outcome == execHappened:
+			proc.pending = nil
+			proc.commitExec(pending, truncateComm(ctx.GetProcessName()))
 			execFallback = true
 		}
 	}
@@ -89,7 +92,7 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 		proc.applyExec(m)
 	case *pb.Execve:
 		if exit := m.GetExit(); exit != nil && exit.GetErrorno() == 0 {
-			proc.applySyscallExec(m)
+			proc.applySyscallExec(m, ctx)
 		}
 	case *pb.CloneInfo:
 		t.applyClone(proc, m)
@@ -105,15 +108,24 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 	if c, ok := p.Msg.(*pb.Connect); ok {
 		snap.L4 = t.sockets[proc.Pid][c.GetFd()]
 	}
-	if exit, ok := p.Msg.(*pb.TaskExit); ok && isThreadGroupLeader(exit.GetContextData()) {
-		t.retire(proc.Pid)
+	if _, ok := p.Msg.(*pb.TaskExit); ok {
+		switch {
+		case !isThreadGroupLeader(ctx):
+			proc.threads = max(proc.threads-1, 0)
+		case proc.threads == 0:
+			t.retire(proc.Pid)
+		}
 	}
 	return snap
 }
 
 func (t *ProcessTable) applyClone(parent *ProcessInfo, info *pb.CloneInfo) {
 	child := info.GetCreatedThreadGroupId()
-	if child == 0 || child == parent.Pid {
+	if child == parent.Pid {
+		parent.threads++
+		return
+	}
+	if child == 0 {
 		return
 	}
 	created := parent.clone()
@@ -147,11 +159,12 @@ func (t *ProcessTable) lookup(pid int32) (*ProcessInfo, bool) {
 	return elem.Value.(*ProcessInfo), true
 }
 
-// retire makes a process the first to be evicted. gVisor reports the
-// leader's task_exit even when other threads of the group keep running (the
-// leader called pthread_exit, or another thread is exec'ing), so the row is
-// kept: a later event from the group moves it back to the front. A reused
-// pid is recognised by its new start time or by the clone that creates it.
+// retire makes a process the first to be evicted. It is called when the
+// leader exits with no other thread of the group known to be alive; the row
+// is kept, not removed, because threads created before the plugin attached
+// are unknown, and a later event from the group moves it back to the front.
+// A reused pid is recognised by its new start time or by the clone that
+// creates it.
 func (t *ProcessTable) retire(pid int32) {
 	if elem, ok := t.entries[pid]; ok {
 		t.lru.MoveToBack(elem)

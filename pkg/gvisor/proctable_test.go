@@ -315,3 +315,63 @@ func TestStartPoint(t *testing.T) {
 		t.Errorf("start not applied: %+v", snap.Process)
 	}
 }
+
+func TestProcessTablePendingExecAcrossThreads(t *testing.T) {
+	ctxOf := func(tgid, tid int32, comm string) *pb.ContextData {
+		ctx := testContext(tgid, 1, comm)
+		ctx.ThreadId = tid
+		return ctx
+	}
+	apply := func(table *ProcessTable, ctx *pb.ContextData, msg *pb.Execve) Snapshot {
+		if msg != nil {
+			msg.ContextData = ctx
+			return table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_EXECVE, msg))
+		}
+		return table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{ContextData: ctx, Exit: &pb.Exit{}}))
+	}
+
+	threads := NewProcessTable(defaultMaxTrackedProcess)
+	threads.Apply(execPoint(t, 10, 1, "/usr/bin/java", "java"))
+	apply(threads, ctxOf(10, 12, "worker-2"), &pb.Execve{Exit: &pb.Exit{}, Pathname: "/tmp/xmrig", Argv: []string{"xmrig", "-o", "pool:3333"}})
+	for _, sibling := range []*pb.ContextData{ctxOf(10, 10, "java"), ctxOf(10, 11, "worker-1")} {
+		if snap := apply(threads, sibling, nil); snap.ExecFallback {
+			t.Errorf("a sibling thread running during the image load resolved the exec: %+v", sibling)
+		}
+	}
+	if snap := apply(threads, ctxOf(10, 10, "xmrig"), nil); !snap.ExecFallback || snap.Process.ExePath != "/tmp/xmrig" {
+		t.Errorf("an exec from a non-leader thread was lost to its siblings' events: %+v", snap.Process)
+	}
+
+	script := NewProcessTable(defaultMaxTrackedProcess)
+	script.Apply(execPoint(t, 20, 1, "/bin/bash", "bash"))
+	apply(script, ctxOf(20, 20, "bash"), &pb.Execve{Exit: &pb.Exit{}, Pathname: "/tmp/run.sh", Argv: []string{"/tmp/run.sh"}})
+	if snap := apply(script, ctxOf(20, 20, "sh"), nil); !snap.ExecFallback || snap.Process.ExePath != "/tmp/run.sh" || snap.Process.Comm != "sh" {
+		t.Errorf("a script exec, named after its interpreter, was not confirmed: %+v", snap.Process)
+	}
+
+	fd := NewProcessTable(defaultMaxTrackedProcess)
+	fd.Apply(execPoint(t, 30, 1, "/bin/sh", "sh"))
+	apply(fd, ctxOf(30, 30, "sh"), &pb.Execve{Exit: &pb.Exit{}, Fd: 3, FdPath: "/tmp/payload", Argv: []string{"kworker"}})
+	if snap := apply(fd, ctxOf(30, 30, "3"), nil); !snap.ExecFallback || snap.Process.ExePath != "/tmp/payload" {
+		t.Errorf("an fd-only execveat was not confirmed with its fd_path: %+v", snap.Process)
+	}
+}
+
+func TestProcessTableKeepsGroupWithLiveThreads(t *testing.T) {
+	table := NewProcessTable(2)
+	table.Apply(execPoint(t, 2, 1, "/usr/bin/server", "server"))
+	table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SENTRY_CLONE, &pb.CloneInfo{ContextData: testContext(2, 1, "server"), CreatedThreadGroupId: 2, CreatedThreadId: 5}))
+	table.Apply(execPoint(t, 3, 1, "/usr/bin/other", "other"))
+	table.Apply(exitPoint(t, 2, 2))
+	table.Apply(execPoint(t, 4, 1, "/usr/bin/new", "new"))
+	if _, ok := table.lookup(2); !ok {
+		t.Error("a group whose leader exited while a known thread runs was evicted first")
+	}
+
+	table.Apply(exitPoint(t, 2, 5))
+	table.Apply(exitPoint(t, 2, 2))
+	table.Apply(execPoint(t, 6, 1, "/usr/bin/later", "later"))
+	if _, ok := table.lookup(2); ok {
+		t.Error("a group whose last known thread exited was not evicted first")
+	}
+}
