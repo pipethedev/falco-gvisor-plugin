@@ -3,3 +3,7 @@
 /dist/
 *.test
 *.out
+
+falco_audit_first.md
+falco_audit_second.md
+SPEC.md
