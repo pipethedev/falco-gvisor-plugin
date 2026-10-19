@@ -44,7 +44,6 @@ type EmitFunc func(owner uint64, data []byte, ts time.Time) error
 // it is not known yet. Implementations must not block.
 type ContainerResolver interface {
 	Lookup(containerID string) *ContainerInfo
-	Await(containerID string, timeout time.Duration) *ContainerInfo
 }
 
 // ConnInfo describes one live sandbox connection.
@@ -79,6 +78,8 @@ type sandboxConn struct {
 	conn    *net.UnixConn
 	peerPID int32
 	drops   uint64
+
+	hold metadataHold
 
 	mu           sync.Mutex
 	containerIDs map[string]struct{}
@@ -236,8 +237,24 @@ func (s *Server) serve(sc *sandboxConn) {
 	}
 	var lastDropped uint32
 	var lastOversizeLog time.Time
+	deadlineSet := false
 	for {
+		switch {
+		case sc.hold.active():
+			_ = sc.conn.SetReadDeadline(s.holdDeadline(sc))
+			deadlineSet = true
+		case deadlineSet:
+			_ = sc.conn.SetReadDeadline(time.Time{})
+			deadlineSet = false
+		}
 		msg, err := reader.next(s.maxEventSize)
+		timedOut := errors.Is(err, os.ErrDeadlineExceeded)
+		if sc.hold.active() && (s.holdReady(sc) || (err != nil && !timedOut)) {
+			_ = guard(s.stats, "metadata hold flush", func() { s.flushHold(sc) })
+		}
+		if timedOut {
+			continue
+		}
 		var oversize *oversizeError
 		if errors.As(err, &oversize) {
 			s.stats.DropTruncated.Add(1)
@@ -274,17 +291,7 @@ func (s *Server) countDecodeError(err error) {
 	s.stats.DropDecodeError.Add(1)
 }
 
-func (s *Server) handlePoint(sc *sandboxConn, table *ProcessTable, point Point) {
-	snap := table.Apply(point)
-	containerID := pointContainerID(point)
-	ctx := EventContext{Snapshot: snap, Arch: point.Arch}
-	if containerID != "" {
-		if sc.addContainer(containerID) {
-			ctx.Container = s.resolver.Await(containerID, s.metadataWait)
-		} else {
-			ctx.Container = s.resolver.Lookup(containerID)
-		}
-	}
+func (s *Server) emitEvent(sc *sandboxConn, ctx EventContext, point Point) {
 	data, err := EncodeEvent(ctx, point.Raw)
 	if err != nil {
 		s.stats.DropContextSize.Add(1)

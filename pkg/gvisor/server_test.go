@@ -21,8 +21,6 @@ type fakeResolver map[string]*ContainerInfo
 
 func (f fakeResolver) Lookup(id string) *ContainerInfo { return f[id] }
 
-func (f fakeResolver) Await(id string, _ time.Duration) *ContainerInfo { return f[id] }
-
 type collector struct {
 	events chan []byte
 	accept bool
@@ -178,8 +176,6 @@ func (p panickingResolver) Lookup(id string) *ContainerInfo {
 	return p.fakeResolver.Lookup(id)
 }
 
-func (p panickingResolver) Await(id string, d time.Duration) *ContainerInfo { return p.Lookup(id) }
-
 func TestServerSurvivesPanicInPointProcessing(t *testing.T) {
 	c := newCollector(4)
 	srv, stats := startServer(t, nil, c, panickingResolver{fakeResolver{}})
@@ -251,6 +247,56 @@ func TestServerDeliversLargeExec(t *testing.T) {
 	evt := c.next(t)
 	if evt.Context.Process.ExePath != "/tmp/xmrig" || stats.DropTruncated.Load() != 0 {
 		t.Errorf("an exec with 150 KiB of argv was not delivered under the default maxEventSize (truncated=%d)", stats.DropTruncated.Load())
+	}
+}
+
+func TestServerHoldKeepsReading(t *testing.T) {
+	c := newCollector(4000)
+	stub := &stubFetcher{info: &ContainerInfo{ID: testContainerID, Name: "web"}, release: make(chan struct{})}
+	cache := NewMetadataCache(stub, time.Minute, nil, &Stats{})
+	t.Cleanup(func() { _ = cache.Close() })
+	srv, _ := startServer(t, func(cfg *Config) { cfg.MetadataWaitMillis = maxMetadataWaitMillis }, c, cache)
+	conn := connectSandbox(t, srv.socketPath)
+
+	const burst = 3000
+	if err := conn.SetWriteDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	for i := range burst {
+		pkt := mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
+			ContextData: testContext(int32(i+1), 0, "sh"), BinaryPath: "/bin/true", Argv: []string{"true", strings.Repeat("x", 200)},
+		})
+		if _, err := conn.Write(pkt); err != nil {
+			t.Fatalf("sandbox write %d blocked while metadata was pending: %v", i, err)
+		}
+	}
+	close(stub.release)
+	for i := range burst {
+		evt := c.next(t)
+		if evt.Context.Process.Pid != int32(i+1) {
+			t.Fatalf("event %d out of order: pid %d", i, evt.Context.Process.Pid)
+		}
+		if i == 0 && (evt.Context.Container == nil || evt.Context.Container.Name != "web") {
+			t.Errorf("first held event lacks the metadata resolved during the hold: %+v", evt.Context.Container)
+		}
+	}
+}
+
+func TestServerHoldFlushesWhenIdle(t *testing.T) {
+	c := newCollector(2)
+	stub := &stubFetcher{info: &ContainerInfo{Name: "never"}, release: make(chan struct{})}
+	cache := NewMetadataCache(stub, time.Minute, nil, &Stats{})
+	t.Cleanup(func() { _ = cache.Close() })
+	srv, _ := startServer(t, func(cfg *Config) { cfg.MetadataWaitMillis = 100 }, c, cache)
+	conn := connectSandbox(t, srv.socketPath)
+	start := time.Now()
+	send(t, conn, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{ContextData: testContext(1, 0, "sh"), BinaryPath: "/bin/sh"}))
+	evt := c.next(t)
+	if evt.Context.Container != nil {
+		t.Errorf("metadata attached although it never resolved: %+v", evt.Context.Container)
+	}
+	if elapsed := time.Since(start); elapsed > testWait/2 {
+		t.Errorf("held event on a quiet connection took %v to flush", elapsed)
 	}
 }
 
