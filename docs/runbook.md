@@ -60,7 +60,7 @@ New containers are monitored at creation. Existing ones are attached by the plug
 3. **A sandbox has the session:**
 
    ```sh
-   sudo runsc --root <root> trace list <sandbox-id>     # shows session "falco"
+   sudo runsc --root <root> trace list <sandbox-id>     # shows session "Default"
    sudo runsc --root <root> trace metadata              # points and sinks this runsc supports
    ```
 

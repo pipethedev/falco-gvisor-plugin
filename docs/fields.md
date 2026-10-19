@@ -112,7 +112,7 @@ Differences from Falco's syscall source:
 | `gvisor.sysno` | uint64 | Raw syscall number for syscall points. |
 | `gvisor.point` | string | gVisor trace point, e.g. syscall/connect/exit or sentry/execve. |
 | `gvisor.anames` | list of string | Names of all known ancestors, nearest first; use with intersects / in. |
-| `gvisor.exit_status` | uint64 | Exit status for task_exit and exit_notify_parent points. |
+| `gvisor.exit_status` | uint64 | task_exit and exit_notify_parent points: the thread group's Linux wait status as gVisor reports it, not the exit code. The exit code is exit_status >> 8 (exit_group(1) gives 256); a death by signal has the signal number in the low 7 bits. A task_exit of a thread while its group still runs carries the group's status, usually 0. |
 | `gvisor.prev_uid` | uint64 | setuid-family events: the effective uid the process had before the call. Absent if the process had not been seen before. |
 | `gvisor.is_exec_fallback` | bool | True on the first event of a process after an execve/execveat whose sentry/execve point was not received (dropped by gVisor) but which did happen: gVisor reports the syscall exit before loading the image, so the exec only counts once a later event shows the task renamed to the new program. Exec rules can match it in place of sentry_execve. proc.* describes the new program; binary details (layer flags, hash, stdio) are absent. An exec of a program with the same name as the old one cannot be confirmed this way. |
 | `gvisor.stdin_pipe_proc` | string | Name of the process writing to this process's stdin pipe at exec, e.g. curl in curl \| sh. Set only if the writer is still running when the reader execs (gVisor inspects live siblings), and requires pipe_proc_info on sentry/execve. |
