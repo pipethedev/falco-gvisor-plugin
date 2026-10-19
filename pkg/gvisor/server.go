@@ -37,7 +37,8 @@ var (
 
 // EmitFunc hands an encoded event to Falco on behalf of a sandbox
 // connection (owner). It must not block; it returns ErrQueueFull or
-// ErrQueueShare when the event could not be queued.
+// ErrQueueShare when the event could not be queued, and ErrSourceClosed
+// once the source is shutting down, which is not counted as a drop.
 type EmitFunc func(owner uint64, data []byte, ts time.Time) error
 
 // ContainerResolver returns cached metadata for a container id, or nil when
@@ -324,6 +325,9 @@ func (s *Server) emitEvent(sc *sandboxConn, ctx EventContext, point Point) {
 		return
 	}
 	if err := s.emit(sc.id, data, pointTime(point)); err != nil {
+		if errors.Is(err, ErrSourceClosed) {
+			return
+		}
 		sc.drops++
 		if errors.Is(err, ErrQueueShare) {
 			s.stats.DropQueueShare.Add(1)

@@ -68,7 +68,10 @@ func (q *eventQueue) share() int {
 func (q *eventQueue) push(owner uint64, data []byte, ts time.Time) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if q.closed || q.bytes+len(data) > q.maxBytes {
+	if q.closed {
+		return ErrSourceClosed
+	}
+	if q.bytes+len(data) > q.maxBytes {
 		return ErrQueueFull
 	}
 	if owner != statsOwner && q.ownerBytes[owner]+len(data) > q.share() {

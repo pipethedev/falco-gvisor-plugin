@@ -107,7 +107,7 @@ func (s *Source) publishStats(snap StatsSnapshot, now time.Time) {
 		logger.Printf("stats event: %v", err)
 		return
 	}
-	if err := s.queue.push(statsOwner, data, now); err != nil {
+	if err := s.queue.push(statsOwner, data, now); err != nil && !errors.Is(err, ErrSourceClosed) {
 		s.stats.DropChannelFull.Add(1)
 	}
 }

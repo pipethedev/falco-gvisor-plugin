@@ -97,8 +97,8 @@ func TestQueueCloseAndCancel(t *testing.T) {
 	q := newEventQueue(1<<20, 1, &Stats{})
 	_ = q.push(ownerA, []byte{1}, time.Now())
 	q.close()
-	if err := q.push(ownerA, []byte{2}, time.Now()); err == nil {
-		t.Error("push after close accepted")
+	if err := q.push(ownerA, []byte{2}, time.Now()); !errors.Is(err, ErrSourceClosed) {
+		t.Errorf("push after close err = %v, want ErrSourceClosed (not a drop)", err)
 	}
 	if _, err := q.pop(context.Background(), shortWait); err != nil {
 		t.Errorf("queued event lost on close: %v", err)
