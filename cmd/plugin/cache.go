@@ -29,6 +29,10 @@ func newEventCache() *eventCache {
 }
 
 // get returns the decoded event for num, decoding it with load on a miss.
+// load runs under the lock on purpose: concurrent misses for the same event
+// then share one decoded copy instead of each holding its own, whose ipaddr
+// bytes Falco might still be reading. Extraction is synchronous, so this
+// serialisation costs nothing today; do not move load outside the lock.
 func (c *eventCache) get(num uint64, load func() (*gvisor.Event, error)) (*gvisor.Event, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
