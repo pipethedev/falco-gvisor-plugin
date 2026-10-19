@@ -170,6 +170,33 @@ func TestAttacherExpiresBindingsWithoutConnection(t *testing.T) {
 	}
 }
 
+func TestAttacherWaitsForPendingConnection(t *testing.T) {
+	runner := &fakeRunner{list: `[{"id":"aaa","status":"running"}]`}
+	conns := &fakeConns{conns: []ConnInfo{{Since: time.Now()}}}
+	a, _ := newTestAttacher(runner, conns)
+	go func() {
+		time.Sleep(2 * pendingPollInterval)
+		conns.mu.Lock()
+		conns.conns[0].ContainerIDs = []string{"aaa"}
+		conns.mu.Unlock()
+	}()
+	a.Sweep(context.Background())
+	if got := runner.attached(); len(got) != 0 {
+		t.Errorf("attached %v while a new connection had not yet identified its sandbox", got)
+	}
+
+	stale := &fakeConns{conns: []ConnInfo{{Since: time.Now().Add(-time.Hour)}}}
+	b, _ := newTestAttacher(&fakeRunner{list: `[{"id":"aaa","status":"running"}]`}, stale)
+	b.attachGrace = time.Millisecond
+	done := make(chan struct{})
+	go func() { b.Sweep(context.Background()); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(testWait):
+		t.Fatal("a connection older than the grace period blocked the sweep")
+	}
+}
+
 func TestAttacherFailuresAndTimeouts(t *testing.T) {
 	runner := &fakeRunner{list: runscListJSON, failFor: map[string]bool{"aaa": true}}
 	a, stats := newTestAttacher(runner, &fakeConns{})

@@ -50,6 +50,7 @@ type ContainerResolver interface {
 type ConnInfo struct {
 	PeerPID      int32
 	ContainerIDs []string
+	Since        time.Time
 }
 
 // Server accepts gVisor remote-sink connections and turns trace points into
@@ -75,6 +76,7 @@ type Server struct {
 
 type sandboxConn struct {
 	id      uint64
+	since   time.Time
 	conn    *net.UnixConn
 	peerPID int32
 	drops   uint64
@@ -188,7 +190,7 @@ func (s *Server) acceptOne() bool {
 		_ = conn.Close()
 		return true
 	}
-	sc := &sandboxConn{id: s.nextID.Add(1), conn: conn, peerPID: pid, containerIDs: map[string]struct{}{}}
+	sc := &sandboxConn{id: s.nextID.Add(1), since: time.Now(), conn: conn, peerPID: pid, containerIDs: map[string]struct{}{}}
 	if !s.track(sc) {
 		_ = conn.Close()
 		return false
@@ -405,5 +407,5 @@ func (sc *sandboxConn) info() ConnInfo {
 	for id := range sc.containerIDs {
 		ids = append(ids, id)
 	}
-	return ConnInfo{PeerPID: sc.peerPID, ContainerIDs: ids}
+	return ConnInfo{PeerPID: sc.peerPID, ContainerIDs: ids, Since: sc.since}
 }

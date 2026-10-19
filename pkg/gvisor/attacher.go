@@ -12,6 +12,8 @@ import (
 const (
 	defaultListTimeout   = 15 * time.Second
 	defaultAttachTimeout = 30 * time.Second
+	defaultAttachGrace   = 15 * time.Second
+	pendingPollInterval  = 500 * time.Millisecond
 	attachConcurrency    = 4
 	statusRunning        = "running"
 	flagRoot             = "--root"
@@ -60,6 +62,7 @@ type Attacher struct {
 	stats         *Stats
 	listTimeout   time.Duration
 	attachTimeout time.Duration
+	attachGrace   time.Duration
 
 	mu       sync.Mutex
 	attached map[int32]*attachBinding
@@ -76,6 +79,7 @@ func NewAttacher(cfg Config, runner Runner, conns ConnectionLister, stats *Stats
 		stats:         stats,
 		listTimeout:   defaultListTimeout,
 		attachTimeout: defaultAttachTimeout,
+		attachGrace:   defaultAttachGrace,
 		attached:      make(map[int32]*attachBinding),
 	}
 }
@@ -112,6 +116,9 @@ func (a *Attacher) Sweep(ctx context.Context) {
 	}
 	a.stats.AttacherFailed.Store(false)
 	a.forgetGone(sandboxes)
+	if !a.waitForPendingConnections(ctx) {
+		return
+	}
 	connected := a.connectedSandboxes(sandboxes)
 
 	sem := make(chan struct{}, attachConcurrency)
@@ -128,6 +135,10 @@ func (a *Attacher) Sweep(ctx context.Context) {
 			wg.Wait()
 			return
 		}
+		if a.connectedSandboxes(sandboxes)[id] {
+			<-sem
+			continue
+		}
 		wg.Go(func() {
 			defer func() { <-sem }()
 			attached := false
@@ -137,6 +148,36 @@ func (a *Attacher) Sweep(ctx context.Context) {
 		})
 	}
 	wg.Wait()
+}
+
+// waitForPendingConnections holds the sweep while a recently accepted
+// connection has not yet identified its sandbox (no container id seen, no
+// attach binding): attaching now could force-replace that very session.
+// Connections older than attachGrace are no longer considered pending.
+// It returns false if ctx is cancelled.
+func (a *Attacher) waitForPendingConnections(ctx context.Context) bool {
+	for a.hasPendingConnection(time.Now()) {
+		select {
+		case <-ctx.Done():
+			return false
+		case <-time.After(pendingPollInterval):
+		}
+	}
+	return true
+}
+
+func (a *Attacher) hasPendingConnection(now time.Time) bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for _, conn := range a.conns.Connections() {
+		if _, bound := a.attached[conn.PeerPID]; bound && conn.PeerPID != 0 {
+			continue
+		}
+		if len(conn.ContainerIDs) == 0 && now.Sub(conn.Since) < a.attachGrace {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *Attacher) listSandboxes(ctx context.Context) (sandboxSet, error) {
