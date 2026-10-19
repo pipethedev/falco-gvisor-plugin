@@ -80,10 +80,11 @@ New containers are monitored at creation. Existing ones are attached by the plug
 | `drops_sandbox` grows | The sandbox could not write to the socket in time. Raise `retries`/`backoff_max` in the session (costs workload latency on bursts) or reduce points. |
 | `drops_truncated` grows | Messages exceed `maxEventSize` (very long argv); raise it. |
 | `handshake_rejected` | A sandbox speaks an unsupported wire version: upgrade the plugin to match runsc. |
+| `peer_rejected` grows, log says `peer executable is not runsc` | `requireRunscPeer` is on and the connecting process isn't a binary named `runsc`: either your runtime calls runsc under another name or through a wrapper, or Falco can't see the host's processes (no host PID namespace). Fix that, or set `requireRunscPeer: false`. |
 | File rules never fire | They need the full profile (`pod-init-full.json`, `gvisor-session-full.json`). |
 | Only one alert for an event matching two rules | Falco's default `rule_matching: first`. Set `rule_matching: all` to get every match. |
 
-Enable the `gVisor Monitoring Dropping Events` rule (disabled by default) to turn drops into alerts.
+The `gVisor Monitoring Dropping Events` rule alerts when events are dropped.
 
 ## Restarts and reloads
 

@@ -65,6 +65,7 @@ plugins:
       attachOnOpen: true
       attachIntervalSeconds: 2
       statsIntervalSeconds: 5
+      requireRunscPeer: true
 load_plugins: [gvisor]
 rules_files: [/etc/falco/rules.d/gvisor_rules.yaml]
 json_output: true

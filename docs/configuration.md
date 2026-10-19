@@ -12,7 +12,7 @@ All settings go in `init_config`. Unknown keys are rejected. The plugin takes no
 |---|---|---|
 | `socketPath` | `/run/falco/gvisor.sock` | Socket the sandboxes connect to. Must match the `endpoint` in the trace session files. |
 | `maxConnections` | `1024` | Maximum sandboxes connected at once. Extra connections are refused, logged and counted (`connections_rejected`), and the health rule fires. |
-| `requireRunscPeer` | `false` | Only accept connections from a `runsc` executable (checked through `/proc/<pid>/exe`, so Falco must share the host PID namespace). Connections are always limited to root or Falco's own user. |
+| `requireRunscPeer` | `false` | Only accept connections from an executable named `runsc` (checked through `/proc/<pid>/exe`, so Falco must share the host PID namespace). The shipped `deploy/falco.config.d/gvisor.yaml`, used by the Docker, Nomad and host setups, turns it on; the Kubernetes values leave it off because the Falco chart doesn't use the host PID namespace. Connections are always limited to root or Falco's own user. |
 
 ### Attaching to running sandboxes
 

@@ -53,6 +53,7 @@ plugins:
       runscRoot: ${RUNSC_ROOT}
       attachIntervalSeconds: ${ATTACH_INTERVAL}
       statsIntervalSeconds: 5
+      requireRunscPeer: true
 load_plugins: [gvisor]
 rules:
   - enable:
