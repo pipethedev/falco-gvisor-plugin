@@ -312,3 +312,40 @@ func TestAttacherSandboxIDs(t *testing.T) {
 		})
 	}
 }
+
+type appearingConns struct {
+	mu    sync.Mutex
+	calls int
+	after int
+	conn  ConnInfo
+}
+
+func (c *appearingConns) Connections() []ConnInfo {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.calls++
+	if c.calls <= c.after {
+		return nil
+	}
+	return []ConnInfo{c.conn}
+}
+
+func (c *appearingConns) identify(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.conn.ContainerIDs = []string{id}
+}
+
+func TestAttacherRechecksPendingBeforeEachAttach(t *testing.T) {
+	runner := &fakeRunner{list: `[{"id":"aaa","status":"running"}]`}
+	conns := &appearingConns{after: 1, conn: ConnInfo{Since: time.Now()}}
+	a, _ := newTestAttacher(runner, conns)
+	go func() {
+		time.Sleep(2 * pendingPollInterval)
+		conns.identify("aaa")
+	}()
+	a.Sweep(context.Background())
+	if got := runner.attached(); len(got) != 0 {
+		t.Errorf("attached %v over a connection that arrived during the sweep", got)
+	}
+}

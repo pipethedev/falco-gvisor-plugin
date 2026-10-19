@@ -147,6 +147,11 @@ func (a *Attacher) Sweep(ctx context.Context) {
 			wg.Wait()
 			return
 		}
+		if !a.waitForPendingConnections(ctx) {
+			<-sem
+			wg.Wait()
+			return
+		}
 		if a.connectedSandboxes(sandboxes)[id] {
 			<-sem
 			continue
