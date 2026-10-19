@@ -12,7 +12,7 @@ jobs:
   perf:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Install gVisor runtimes (baseline, lean, full)
         run: |
           curl -fsSL https://gvisor.dev/archive.key | sudo gpg --dearmor -o /usr/share/keyrings/gvisor-archive-keyring.gpg
@@ -40,7 +40,7 @@ jobs:
         run: |
           RUNS=30 REQUESTS=2000 ./test/perf/run.sh runsc runsc-lean runsc-full | tee perf-results.md
           cat perf-results.md >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: perf-results
           path: perf-results.md

@@ -1,6 +1,6 @@
 # Falco with the gvisor plugin, rules and example configs.
 ARG FALCO_IMAGE=falcosecurity/falco:0.45.0@sha256:788f1129c542171813083d4afc61b16730a47dde8c23d9c39370acef996349b6
-ARG GO_IMAGE=golang:1.27-bookworm
+ARG GO_IMAGE=golang:1.27-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
 
 FROM ${GO_IMAGE} AS build
 WORKDIR /src
