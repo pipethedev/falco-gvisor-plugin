@@ -13,6 +13,8 @@ Differences from Falco's syscall source:
 - `fd.name` for `connect` is the remote endpoint (`ip:port`); the local
   side is not reported by gVisor.
 - `evt.arg.*` values are rendered strings (`O_WRONLY|O_CREAT`, `AF_PACKET`).
+- `evt.res` is `SUCCESS` or the errno name, as in Falco. There is no `evt.rawres`:
+  plugin fields have no signed integer type to carry negative return values.
 - `proc.aname`/`proc.aexepath` require an index; use `gvisor.anames` to
   match any ancestor.
 - Container metadata (name, image, labels, k8s) is resolved asynchronously.
