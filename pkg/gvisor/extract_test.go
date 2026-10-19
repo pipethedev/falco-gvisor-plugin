@@ -76,6 +76,8 @@ func TestExtractConnect(t *testing.T) {
 		fieldFDRIP:       net.IP{169, 254, 169, 254},
 		fieldFDSPort:     uint64(80),
 		fieldFDRPort:     uint64(80),
+		fieldFDSNet:      net.IPNet{IP: net.IP{169, 254, 169, 254}, Mask: net.CIDRMask(32, 32)},
+		fieldFDRNet:      net.IPNet{IP: net.IP{169, 254, 169, 254}, Mask: net.CIDRMask(32, 32)},
 		fieldGvisorPoint: "syscall/connect/exit",
 		fieldGvisorSysno: sysnoOf(t, "connect"),
 		fieldProcName:    "curl",
@@ -111,6 +113,10 @@ func TestExtractIPOwnedByEvent(t *testing.T) {
 	if &first[0] != &second[0] || &first[0] != &evt.fd.rip[0] || !sip.Equal(first) {
 		t.Fatal("ipaddr values must point into memory owned by the cached event, not fresh per-call allocations: the SDK hands the slice's address to Falco without copying it")
 	}
+	rnet := get(t, evt, fieldFDRNet).(net.IPNet)
+	if &rnet.IP[0] != &evt.fd.rip[0] {
+		t.Fatal("ipnet values must point into memory owned by the cached event, for the same reason as ipaddr")
+	}
 }
 
 func TestExtractConnectIPv6AndUnix(t *testing.T) {
@@ -124,11 +130,14 @@ func TestExtractConnectIPv6AndUnix(t *testing.T) {
 	if get(t, evt, fieldEvtRes) != evtResSuccess {
 		t.Errorf("evt.res = %v", get(t, evt, fieldEvtRes))
 	}
+	if rnet, ok := get(t, evt, fieldFDRNet).(net.IPNet); !ok || !ip6.Equal(rnet.IP) {
+		t.Errorf("ipv6: rnet=%v", get(t, evt, fieldFDRNet))
+	}
 
 	evt = eventFor(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{
 		ContextData: testContext(42, 1, "curl"), Exit: &pb.Exit{}, Address: sockaddrUnix("/var/run/docker.sock"),
 	})
-	if get(t, evt, fieldFDName) != "/var/run/docker.sock" || get(t, evt, fieldFDType) != FDTypeUnix || get(t, evt, fieldFDRIP) != nil {
+	if get(t, evt, fieldFDName) != "/var/run/docker.sock" || get(t, evt, fieldFDType) != FDTypeUnix || get(t, evt, fieldFDRIP) != nil || get(t, evt, fieldFDRNet) != nil {
 		t.Errorf("unix connect: name=%v type=%v", get(t, evt, fieldFDName), get(t, evt, fieldFDType))
 	}
 }
@@ -477,6 +486,7 @@ func TestEveryFieldHasExtractorAndType(t *testing.T) {
 		typeUint64: reflect.TypeFor[uint64](),
 		typeBool:   reflect.TypeFor[bool](),
 		typeIPAddr: reflect.TypeFor[net.IP](),
+		typeIPNet:  reflect.TypeFor[net.IPNet](),
 	}
 	seen := map[string]bool{}
 	for _, def := range Fields() {

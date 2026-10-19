@@ -24,6 +24,7 @@ const (
 	typeUint64 = "uint64"
 	typeBool   = "bool"
 	typeIPAddr = "ipaddr"
+	typeIPNet  = "ipnet"
 )
 
 const (
@@ -54,6 +55,8 @@ const (
 	fieldFDSIP       = "fd.sip"
 	fieldFDSPort     = "fd.sport"
 	fieldFDRIP       = "fd.rip"
+	fieldFDSNet      = "fd.snet"
+	fieldFDRNet      = "fd.rnet"
 	fieldFDRPort     = "fd.rport"
 	fieldFDL4Proto   = "fd.l4proto"
 
@@ -158,6 +161,8 @@ var fieldDefs = []FieldDef{
 	field(fieldFDSPort, typeUint64, "Server port."),
 	field(fieldFDRIP, typeIPAddr, "Remote IP: the connect target or the accepted peer."),
 	field(fieldFDRPort, typeUint64, "Remote port."),
+	field(fieldFDSNet, typeIPNet, "Server IP for network matching: compare it with a CIDR, e.g. fd.snet = \"10.0.0.0/8\"."),
+	field(fieldFDRNet, typeIPNet, "Remote IP for network matching: compare it with a CIDR, e.g. fd.rnet in (\"100.64.0.0/10\", \"10.0.0.0/8\")."),
 	field(fieldFDL4Proto, typeString, "tcp, udp or raw for IPv4 and IPv6 sockets whose type is known: on socket and listen, and on connect when the socket() call that created the fd was seen. Absent for other families (Unix, netlink, packet) and when the type is unknown."),
 
 	field(fieldProcPid, typeUint64, "Thread-group id inside the sandbox."),

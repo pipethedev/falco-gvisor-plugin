@@ -47,6 +47,8 @@ var pointExtractors = map[string]extractorFunc{
 	fieldFDRIP:       fdIP(func(v fdView) (net.IP, uint16) { return v.rip, v.rport }, false),
 	fieldFDSPort:     fdIP(func(v fdView) (net.IP, uint16) { return v.sip, v.sport }, true),
 	fieldFDRPort:     fdIP(func(v fdView) (net.IP, uint16) { return v.rip, v.rport }, true),
+	fieldFDSNet:      fdNet(func(v fdView) net.IP { return v.sip }),
+	fieldFDRNet:      fdNet(func(v fdView) net.IP { return v.rip }),
 
 	fieldProcPid:        proc(func(p ProcessInfo) any { return uint64(p.Pid) }),
 	fieldProcPpid:       proc(func(p ProcessInfo) any { return uint64(p.Ppid) }),
@@ -268,6 +270,19 @@ func fdIP(get func(fdView) (net.IP, uint16), wantPort bool) extractorFunc {
 			return uint64(port), true
 		}
 		return ip, true
+	}
+}
+
+func fdNet(get func(fdView) net.IP) extractorFunc {
+	return func(e *Event, _ FieldRequest) (any, bool) {
+		if !e.fdOK {
+			return nil, false
+		}
+		ip := get(e.fd)
+		if ip == nil {
+			return nil, false
+		}
+		return net.IPNet{IP: ip, Mask: net.CIDRMask(len(ip)*8, len(ip)*8)}, true
 	}
 }
 
