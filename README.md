@@ -94,6 +94,7 @@ The plugin takes no open parameters (`open_params`); a non-empty value is reject
 | `maxTrackedProcesses` | `4096` | Per-sandbox process table cap |
 | `statsIntervalSeconds` | `60` | Emit a `gvisor_stats` event and log counters; `0` disables |
 | `metadataWaitMillis` | `200` | On a container's first event, how long its sandbox connection waits for metadata before emitting; `0` disables |
+| `captureArgs` | `true` | Forward process arguments. When `false`, only `argv[0]` is kept in the event and the forwarded packet; the argument-based rules (miner arguments, reverse shell and download-pipe command lines) can no longer match |
 | `maxQueueBytes` | `67108864` (64 MiB) | Byte budget for events waiting for Falco. Each sandbox may use an equal share of it (the budget divided by connected sandboxes, at least two maximum-size events); beyond that its events are dropped and counted (`drops_queue_share`, `drops_channel_full`) |
 
 ### Trace sessions

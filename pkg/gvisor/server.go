@@ -60,6 +60,7 @@ type Server struct {
 	maxEventSize int
 	maxProcesses int
 	metadataWait time.Duration
+	captureArgs  bool
 	emit         EmitFunc
 	resolver     ContainerResolver
 	stats        *Stats
@@ -91,6 +92,7 @@ func NewServer(cfg Config, emit EmitFunc, resolver ContainerResolver, stats *Sta
 		maxEventSize: cfg.MaxEventSize,
 		maxProcesses: cfg.MaxTrackedProcesses,
 		metadataWait: cfg.metadataWait(),
+		captureArgs:  cfg.CaptureArgs,
 		emit:         emit,
 		resolver:     resolver,
 		stats:        stats,
@@ -242,6 +244,9 @@ func (s *Server) serve(sc *sandboxConn) {
 			continue
 		}
 		point, err := DecodePoint(buf[:n])
+		if err == nil && !s.captureArgs {
+			point, err = redactArgs(point)
+		}
 		if err != nil {
 			s.countDecodeError(err)
 			continue

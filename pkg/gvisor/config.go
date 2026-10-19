@@ -54,6 +54,7 @@ type Config struct {
 	StatsIntervalSeconds    int      `json:"statsIntervalSeconds"`
 	MaxQueueBytes           int      `json:"maxQueueBytes"`
 	MetadataWaitMillis      int      `json:"metadataWaitMillis"`
+	CaptureArgs             bool     `json:"captureArgs"`
 }
 
 // DefaultConfig returns the configuration used for keys absent from the init config.
@@ -75,6 +76,7 @@ func DefaultConfig() Config {
 		StatsIntervalSeconds:    defaultStatsInterval,
 		MaxQueueBytes:           defaultMaxQueueBytes,
 		MetadataWaitMillis:      defaultMetadataWaitMillis,
+		CaptureArgs:             true,
 	}
 }
 

@@ -197,6 +197,22 @@ func TestServerSurvivesPanicInPointProcessing(t *testing.T) {
 	}
 }
 
+func TestServerRedactsArgs(t *testing.T) {
+	c := newCollector(2)
+	srv, _ := startServer(t, func(cfg *Config) { cfg.CaptureArgs = false }, c, fakeResolver{})
+	conn := connectSandbox(t, srv.socketPath)
+	send(t, conn, mustPacket(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
+		ContextData: testContext(1, 0, "sh"), BinaryPath: "/usr/bin/mysql", Argv: []string{"mysql", "-p", "s3cret"},
+	}))
+	evt := c.next(t)
+	if got := evt.Context.Process.Argv; len(got) != 1 || got[0] != "mysql" {
+		t.Errorf("process argv = %v, want only argv[0]", got)
+	}
+	if got := evt.Point.Msg.(*pb.ExecveInfo).GetArgv(); len(got) != 1 {
+		t.Errorf("forwarded packet still carries arguments: %v", got)
+	}
+}
+
 func TestServerReleasesClosedConnections(t *testing.T) {
 	c := newCollector(1)
 	srv, stats := startServer(t, nil, c, fakeResolver{})

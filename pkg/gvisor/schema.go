@@ -20,6 +20,7 @@ const initSchema = `{
     "maxTrackedProcesses": {"type": "integer", "minimum": 1, "maximum": 1048576, "default": 4096, "description": "Per-sandbox process table cap"},
     "statsIntervalSeconds": {"type": "integer", "minimum": 0, "default": 60, "description": "Interval for gvisor_stats events; 0 disables"},
     "metadataWaitMillis": {"type": "integer", "minimum": 0, "maximum": 5000, "default": 200, "description": "How long a sandbox connection waits for container metadata on a container's first event; 0 disables"},
+    "captureArgs": {"type": "boolean", "default": true, "description": "Forward process arguments; when false only argv[0] is kept, and argument-based rules stop matching"},
     "maxQueueBytes": {"type": "integer", "minimum": 1048576, "maximum": 4294967296, "default": 67108864, "description": "Byte budget for events waiting for Falco; events beyond it are dropped and counted"}
   }
 }`

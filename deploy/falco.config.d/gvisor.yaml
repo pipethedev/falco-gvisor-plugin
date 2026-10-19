@@ -22,6 +22,9 @@ plugins:
     #   maxEventSize: 65536
     #   maxTrackedProcesses: 4096
     #   statsIntervalSeconds: 60
+    #   metadataWaitMillis: 200
+    #   maxQueueBytes: 67108864
+    #   captureArgs: true
 load_plugins: [gvisor]
 # The rules ship as /etc/falco/rules.d/gvisor_rules.yaml, which the default
 # falco.yaml already loads through its /etc/falco/rules.d entry. Listing the
