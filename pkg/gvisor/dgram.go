@@ -60,7 +60,9 @@ func (r *datagramReader) next(limit int) ([]byte, error) {
 		return nil, io.EOF
 	}
 	if size > limit {
-		_, _ = r.conn.Read(r.head[:])
+		if _, err := r.conn.Read(r.head[:]); err != nil {
+			return nil, err
+		}
 		return nil, &oversizeError{size: size, msgType: r.headType(size)}
 	}
 	buf := r.buf
