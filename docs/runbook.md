@@ -14,7 +14,7 @@ The listening socket is created with mode `0660`, owned by Falco's user and grou
 
 ## Host rules on gVisor hosts
 
-With the systrap platform, the gVisor Sentry ptraces its own stub processes, so Falco's stock syscall rule **PTRACE attached to process** fires dozens of times on every sandbox start and buries real alerts. [`deploy/falco.rules.d/gvisor_host_exceptions.yaml`](../deploy/falco.rules.d/gvisor_host_exceptions.yaml) excepts only the Sentry binary (`proc.exepath` ending in `/gvisor-bin/gvisor_sentry`) when its parent is `runsc`; every other ptrace attach still alerts. The image installs it in `/etc/falco/rules.d/`. On other installs, copy it there yourself. It needs the stock `falco_rules.yaml` to be loaded before it, which the default `rules_files` does.
+With the systrap platform, the gVisor Sentry ptraces its own stub processes, so Falco's stock syscall rule **PTRACE attached to process** fires dozens of times on every sandbox start and buries real alerts. [`deploy/falco.rules.d/gvisor_host_exceptions.yaml`](../deploy/falco.rules.d/gvisor_host_exceptions.yaml) excepts only the Sentry binary (`proc.exepath` ending in `/gvisor-bin/gvisor_sentry`) when its parent is `runsc` or the containerd shim it is reparented to (`containerd-shim`, `containerd-shim-runsc-v1`); every other ptrace attach still alerts. The image installs it in `/etc/falco/rules.d/`. On other installs, copy it there yourself. It needs the stock `falco_rules.yaml` to be loaded before it, which the default `rules_files` does.
 
 ## Finding the runsc state root
 

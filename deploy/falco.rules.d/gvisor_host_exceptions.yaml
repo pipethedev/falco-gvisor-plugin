@@ -4,15 +4,16 @@
 #
 # With the systrap platform, the gVisor Sentry ptraces its own stub
 # processes, so every sandbox start would otherwise raise dozens of
-# "PTRACE attached to process" alerts. Only the Sentry binary started by
-# runsc is excepted; every other ptrace attach still alerts.
+# "PTRACE attached to process" alerts. Only the Sentry binary is excepted,
+# while its parent is runsc (during runsc create) or the containerd shim it
+# is reparented to afterwards; every other ptrace attach still alerts.
 
 - rule: PTRACE attached to process
   exceptions:
     - name: gvisor_sentry
       fields: [proc.exepath, proc.pname]
-      comps: [endswith, =]
+      comps: [endswith, in]
       values:
-        - [/gvisor-bin/gvisor_sentry, runsc]
+        - [/gvisor-bin/gvisor_sentry, [runsc, containerd-shim, containerd-shim-runsc-v1]]
   override:
     exceptions: append
