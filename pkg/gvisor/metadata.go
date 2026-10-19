@@ -98,28 +98,6 @@ func (m *MetadataCache) Lookup(containerID string) *ContainerInfo {
 	return entry.info
 }
 
-// Await is Lookup that, for a container with no cached metadata, waits up
-// to timeout for the fetch it starts to finish.
-func (m *MetadataCache) Await(containerID string, timeout time.Duration) *ContainerInfo {
-	if info := m.Lookup(containerID); info != nil || m.fetcher == nil || timeout <= 0 {
-		return info
-	}
-	m.mu.Lock()
-	done, ok := m.inflight[containerID]
-	m.mu.Unlock()
-	if !ok {
-		return m.Lookup(containerID)
-	}
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-	select {
-	case <-done:
-	case <-timer.C:
-	case <-m.ctx.Done():
-	}
-	return m.Lookup(containerID)
-}
-
 // Close cancels pending fetches, waits for them and closes the fetcher.
 func (m *MetadataCache) Close() error {
 	m.cancel()
