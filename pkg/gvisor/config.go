@@ -23,6 +23,8 @@ const (
 	defaultStatsInterval      = 60
 	defaultMaxQueueBytes      = 64 << 20
 	defaultMetadataWaitMillis = 200
+	defaultMaxConnections     = 1024
+	maxMaxConnections         = 65536
 	maxMetadataWaitMillis     = 5000
 	minMaxQueueBytes          = 1 << 20
 	maxMaxQueueBytes          = 4 << 30
@@ -55,6 +57,7 @@ type Config struct {
 	MaxQueueBytes           int      `json:"maxQueueBytes"`
 	MetadataWaitMillis      int      `json:"metadataWaitMillis"`
 	CaptureArgs             bool     `json:"captureArgs"`
+	MaxConnections          int      `json:"maxConnections"`
 }
 
 // DefaultConfig returns the configuration used for keys absent from the init config.
@@ -77,6 +80,7 @@ func DefaultConfig() Config {
 		MaxQueueBytes:           defaultMaxQueueBytes,
 		MetadataWaitMillis:      defaultMetadataWaitMillis,
 		CaptureArgs:             true,
+		MaxConnections:          defaultMaxConnections,
 	}
 }
 
@@ -120,6 +124,9 @@ func (c Config) validate() error {
 	}
 	if c.MetadataWaitMillis < 0 || c.MetadataWaitMillis > maxMetadataWaitMillis {
 		errs = append(errs, fmt.Errorf("%s: metadataWaitMillis must be in [0, %d]", errInvalidConfigPrefix, maxMetadataWaitMillis))
+	}
+	if c.MaxConnections < 1 || c.MaxConnections > maxMaxConnections {
+		errs = append(errs, fmt.Errorf("%s: maxConnections must be in [1, %d]", errInvalidConfigPrefix, maxMaxConnections))
 	}
 	if c.MaxTrackedProcesses < 1 || c.MaxTrackedProcesses > maxMaxTrackedProcesses {
 		errs = append(errs, fmt.Errorf("%s: maxTrackedProcesses must be in [1, %d]", errInvalidConfigPrefix, maxMaxTrackedProcesses))

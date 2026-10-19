@@ -98,22 +98,24 @@ const (
 	fieldGvisorStdinPipeProc = "gvisor.stdin_pipe_proc"
 	fieldGvisorPrevUID       = "gvisor.prev_uid"
 
-	fieldStatsConnections     = "gvisor.stats.connections"
-	fieldStatsEventsPerSecond = "gvisor.stats.events_per_second"
-	fieldStatsDrops           = "gvisor.stats.drops"
-	fieldStatsDropsInterval   = "gvisor.stats.drops_interval"
-	fieldStatsDropChannelFull = "gvisor.stats.drops_channel_full"
-	fieldStatsDropQueueShare  = "gvisor.stats.drops_queue_share"
-	fieldStatsDropTruncated   = "gvisor.stats.drops_truncated"
-	fieldStatsDropDecodeError = "gvisor.stats.drops_decode_error"
-	fieldStatsDropSandbox     = "gvisor.stats.drops_sandbox"
-	fieldStatsAttachAttempts  = "gvisor.stats.attach_attempts"
-	fieldStatsAttachFailures  = "gvisor.stats.attach_failures"
-	fieldStatsQueueBytes      = "gvisor.stats.queue_bytes"
-	fieldStatsUnmonitored     = "gvisor.stats.unmonitored_sandboxes"
-	fieldStatsAttacherFailed  = "gvisor.stats.attacher_failed"
-	fieldStatsPeerRejected    = "gvisor.stats.peer_rejected"
-	fieldStatsPanics          = "gvisor.stats.panics"
+	fieldStatsConnections          = "gvisor.stats.connections"
+	fieldStatsEventsPerSecond      = "gvisor.stats.events_per_second"
+	fieldStatsDrops                = "gvisor.stats.drops"
+	fieldStatsDropsInterval        = "gvisor.stats.drops_interval"
+	fieldStatsDropChannelFull      = "gvisor.stats.drops_channel_full"
+	fieldStatsDropQueueShare       = "gvisor.stats.drops_queue_share"
+	fieldStatsDropTruncated        = "gvisor.stats.drops_truncated"
+	fieldStatsDropDecodeError      = "gvisor.stats.drops_decode_error"
+	fieldStatsDropSandbox          = "gvisor.stats.drops_sandbox"
+	fieldStatsAttachAttempts       = "gvisor.stats.attach_attempts"
+	fieldStatsAttachFailures       = "gvisor.stats.attach_failures"
+	fieldStatsQueueBytes           = "gvisor.stats.queue_bytes"
+	fieldStatsUnmonitored          = "gvisor.stats.unmonitored_sandboxes"
+	fieldStatsAttacherFailed       = "gvisor.stats.attacher_failed"
+	fieldStatsPeerRejected         = "gvisor.stats.peer_rejected"
+	fieldStatsConnRejected         = "gvisor.stats.connections_rejected"
+	fieldStatsConnRejectedInterval = "gvisor.stats.connections_rejected_interval"
+	fieldStatsPanics               = "gvisor.stats.panics"
 )
 
 func field(name, typ, desc string) FieldDef {
@@ -213,6 +215,8 @@ var fieldDefs = []FieldDef{
 	field(fieldStatsQueueBytes, typeUint64, "gvisor_stats: bytes of events waiting for Falco (bounded by maxQueueBytes)."),
 	field(fieldStatsUnmonitored, typeUint64, "gvisor_stats: running sandboxes the last attacher sweep found unconnected and failed to attach."),
 	field(fieldStatsPanics, typeUint64, "gvisor_stats: panics recovered inside the plugin (each is a bug; the affected point or fetch is dropped)."),
+	field(fieldStatsConnRejected, typeUint64, "gvisor_stats: connections refused because maxConnections were open."),
+	field(fieldStatsConnRejectedInterval, typeUint64, "gvisor_stats: connections refused since the previous gvisor_stats event."),
 	field(fieldStatsPeerRejected, typeUint64, "gvisor_stats: connections refused because the peer was neither root nor Falco's user."),
 	field(fieldStatsAttacherFailed, typeBool, "gvisor_stats: true when the last attacher sweep could not list sandboxes (runsc or its state root unreachable)."),
 }

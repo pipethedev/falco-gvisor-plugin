@@ -41,6 +41,7 @@ func TestParseConfigRejects(t *testing.T) {
 		"zero processes":     `{"maxTrackedProcesses":0}`,
 		"negative interval":  `{"attachIntervalSeconds":-1}`,
 		"bad provider":       `{"metadataProvider":"podman"}`,
+		"no connections":     `{"maxConnections":0}`,
 		"tiny queue":         `{"maxQueueBytes":1024}`,
 		"long metadata wait": `{"metadataWaitMillis":60000}`,
 		"queue below events": `{"maxEventSize":4194304,"maxQueueBytes":4194304}`,

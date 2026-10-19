@@ -300,6 +300,23 @@ func TestServerHoldFlushesWhenIdle(t *testing.T) {
 	}
 }
 
+func TestServerCapsConnections(t *testing.T) {
+	c := newCollector(1)
+	srv, stats := startServer(t, func(cfg *Config) { cfg.MaxConnections = 2 }, c, fakeResolver{})
+	connectSandbox(t, srv.socketPath)
+	connectSandbox(t, srv.socketPath)
+	waitFor(t, "two connections", func() bool { return stats.Connections.Load() == 2 })
+	extra := dialSandbox(t, srv.socketPath, wire.CurrentVersion)
+	_ = extra.SetReadDeadline(time.Now().Add(testWait))
+	if _, err := extra.Read(make([]byte, handshakeBufferSize)); err == nil {
+		t.Error("a connection beyond maxConnections completed its handshake")
+	}
+	waitFor(t, "refusal counted", func() bool { return stats.ConnRejected.Load() == 1 })
+	if got := stats.Connections.Load(); got != 2 {
+		t.Errorf("connections = %d", got)
+	}
+}
+
 func TestServerRejectsBadHandshakeOnly(t *testing.T) {
 	c := newCollector(16)
 	srv, stats := startServer(t, nil, c, fakeResolver{})

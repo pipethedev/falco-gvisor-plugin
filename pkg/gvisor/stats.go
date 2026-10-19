@@ -19,6 +19,7 @@ type Stats struct {
 	DropSandbox          atomic.Uint64
 	HandshakeRejected    atomic.Uint64
 	PeerRejected         atomic.Uint64
+	ConnRejected         atomic.Uint64
 	Panics               atomic.Uint64
 	DropPanic            atomic.Uint64
 	AttachAttempts       atomic.Uint64
@@ -43,6 +44,8 @@ type StatsSnapshot struct {
 	DropSandbox          uint64  `json:"drops_sandbox"`
 	HandshakeRejected    uint64  `json:"handshake_rejected"`
 	PeerRejected         uint64  `json:"peer_rejected"`
+	ConnRejected         uint64  `json:"connections_rejected"`
+	ConnRejectedInterval uint64  `json:"connections_rejected_interval"`
 	Panics               uint64  `json:"panics"`
 	DropPanic            uint64  `json:"drops_panic"`
 	AttachAttempts       uint64  `json:"attach_attempts"`
@@ -69,6 +72,7 @@ func (s *Stats) Snapshot(prev StatsSnapshot, now time.Time) StatsSnapshot {
 		DropSandbox:          s.DropSandbox.Load(),
 		HandshakeRejected:    s.HandshakeRejected.Load(),
 		PeerRejected:         s.PeerRejected.Load(),
+		ConnRejected:         s.ConnRejected.Load(),
 		Panics:               s.Panics.Load(),
 		DropPanic:            s.DropPanic.Load(),
 		AttachAttempts:       s.AttachAttempts.Load(),
@@ -77,6 +81,9 @@ func (s *Stats) Snapshot(prev StatsSnapshot, now time.Time) StatsSnapshot {
 		UnmonitoredSandboxes: s.UnmonitoredSandboxes.Load(),
 		AttacherFailed:       s.AttacherFailed.Load(),
 		TimeNs:               now.UnixNano(),
+	}
+	if prev.TimeNs > 0 && snap.ConnRejected >= prev.ConnRejected {
+		snap.ConnRejectedInterval = snap.ConnRejected - prev.ConnRejected
 	}
 	if total, before := snap.TotalDrops(), prev.TotalDrops(); prev.TimeNs > 0 && total >= before {
 		snap.DropsInterval = total - before

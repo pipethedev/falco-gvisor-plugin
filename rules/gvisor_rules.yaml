@@ -620,10 +620,12 @@
     Reported on every gvisor_stats event while it persists.
   condition: >
     evt.type = gvisor_stats
-    and (gvisor.stats.attacher_failed = true or gvisor.stats.unmonitored_sandboxes > 0)
+    and (gvisor.stats.attacher_failed = true or gvisor.stats.unmonitored_sandboxes > 0
+         or gvisor.stats.connections_rejected_interval > 0)
   output: >
     gVisor sandboxes are not monitored (unmonitored=%gvisor.stats.unmonitored_sandboxes
-    attacher_failed=%gvisor.stats.attacher_failed connections=%gvisor.stats.connections
+    attacher_failed=%gvisor.stats.attacher_failed refused_connections=%gvisor.stats.connections_rejected_interval
+    connections=%gvisor.stats.connections
     attach_failures=%gvisor.stats.attach_failures)
   priority: WARNING
   source: gvisor

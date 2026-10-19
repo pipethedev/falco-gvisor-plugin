@@ -60,6 +60,7 @@ type Server struct {
 	maxEventSize int
 	maxProcesses int
 	metadataWait time.Duration
+	maxConns     int
 	captureArgs  bool
 	emit         EmitFunc
 	resolver     ContainerResolver
@@ -72,6 +73,8 @@ type Server struct {
 	conns  map[*sandboxConn]struct{}
 	closed bool
 	nextID atomic.Uint64
+
+	lastRejectLog time.Time
 }
 
 type sandboxConn struct {
@@ -95,6 +98,7 @@ func NewServer(cfg Config, emit EmitFunc, resolver ContainerResolver, stats *Sta
 		maxEventSize: cfg.MaxEventSize,
 		maxProcesses: cfg.MaxTrackedProcesses,
 		metadataWait: cfg.metadataWait(),
+		maxConns:     cfg.MaxConnections,
 		captureArgs:  cfg.CaptureArgs,
 		emit:         emit,
 		resolver:     resolver,
@@ -190,6 +194,15 @@ func (s *Server) acceptOne() bool {
 		_ = conn.Close()
 		return true
 	}
+	if s.connectionCount() >= s.maxConns {
+		s.stats.ConnRejected.Add(1)
+		if time.Since(s.lastRejectLog) > oversizeLogInterval {
+			s.lastRejectLog = time.Now()
+			logger.Printf("refused connection from pid %d: %d connections already open (maxConnections)", pid, s.maxConns)
+		}
+		_ = conn.Close()
+		return true
+	}
 	sc := &sandboxConn{id: s.nextID.Add(1), since: time.Now(), conn: conn, peerPID: pid, containerIDs: map[string]struct{}{}}
 	if !s.track(sc) {
 		_ = conn.Close()
@@ -198,6 +211,12 @@ func (s *Server) acceptOne() bool {
 	s.wg.Add(1)
 	go s.serve(sc)
 	return true
+}
+
+func (s *Server) connectionCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.conns)
 }
 
 func (s *Server) track(sc *sandboxConn) bool {
