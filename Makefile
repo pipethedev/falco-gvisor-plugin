@@ -3,7 +3,7 @@ OUTPUT := lib$(NAME).so
 ARCHES := amd64 arm64
 GO ?= go
 GOLANGCI_VERSION ?= v2.15.0
-LINT ?= $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+GOLANGCI_LINT ?= $(GO) run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
 BUILDER_IMAGE ?= golang:1.27-bookworm
 FALCO_IMAGE ?= falcosecurity/falco:0.45.0
 TEST_IMAGE ?= alpine:3.20
@@ -21,7 +21,7 @@ build:
 
 build-linux: $(addprefix build-linux-,$(ARCHES))
 
-build-linux-%:
+$(addprefix build-linux-,$(ARCHES)): build-linux-%:
 	mkdir -p $(DIST)/$*
 	docker run --rm --platform linux/$* -v $(CURDIR):/src -w /src \
 		-e GOFLAGS=-buildvcs=false $(BUILDER_IMAGE) \
@@ -46,7 +46,7 @@ rules-test: build-linux-$(HOST_ARCH)
 	FALCO_IMAGE=$(FALCO_IMAGE) PLUGIN_DIR=$(CURDIR)/$(DIST)/$(HOST_ARCH) ./rules/tests/run.sh
 
 lint:
-	$(LINT) run ./...
+	$(GOLANGCI_LINT) run ./...
 
 generate:
 	$(GO) generate ./...
