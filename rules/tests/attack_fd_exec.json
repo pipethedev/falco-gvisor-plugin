@@ -1,0 +1,30 @@
+{
+  "description": "A binary written at runtime is executed through a file descriptor (execveat with AT_EMPTY_PATH), so gVisor reports its path as /dev/fd/3 and names the task 3.",
+  "expect": [
+    "gVisor Dropped Binary Executed From Temp Directory"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "3",
+      "exe": "/dev/fd/3",
+      "argv": [
+        "kworker"
+      ],
+      "upper_layer": true
+    }
+  ]
+}

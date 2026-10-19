@@ -1,0 +1,30 @@
+{
+  "description": "Shell commands with an -i option and a stderr redirection, without any network socket, are not reverse shells.",
+  "expect": [],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "bash",
+      "exe": "/bin/bash",
+      "argv": [
+        "bash",
+        "-c",
+        "grep -i >&2 error /var/log/app.log; echo hi -i >&2"
+      ],
+      "lower_layer": true
+    }
+  ]
+}

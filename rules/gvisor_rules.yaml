@@ -334,8 +334,9 @@
 # is set; image files are on the lower layer.
 - macro: gvisor_tmp_dropped_exec
   condition: >
-    ((proc.exepath startswith /tmp/ or proc.exepath startswith /var/tmp/ or proc.exepath startswith /dev/shm/)
-     and (proc.is_exe_upper_layer = true or proc.is_exe_lower_layer = false))
+    (((proc.exepath startswith /tmp/ or proc.exepath startswith /var/tmp/ or proc.exepath startswith /dev/shm/)
+      and (proc.is_exe_upper_layer = true or proc.is_exe_lower_layer = false))
+     or (proc.exepath startswith /dev/fd/ and proc.is_exe_lower_layer = false))
 
 - macro: gvisor_drop_exec_allowlist
   condition: (gvisor_never_true)
@@ -343,7 +344,8 @@
 - rule: gVisor Dropped Binary Executed From Temp Directory
   desc: >
     A binary written at runtime (not shipped in the container image) was executed from /tmp,
-    /var/tmp or /dev/shm.
+    /var/tmp or /dev/shm, or through a file descriptor (fexecve, execveat with an empty path),
+    for which gVisor reports only /dev/fd/N as the path.
   condition: >
     gvisor_exec and gvisor_tmp_dropped_exec
     and not gvisor_drop_exec_allowlist
@@ -422,15 +424,15 @@
   items: [nc, ncat, netcat, nc.traditional, nc.openbsd, socat]
 
 - rule: gVisor Reverse Shell Command Line
-  desc: A command line contains a well-known reverse shell construct (/dev/tcp, nc -e, interactive shell redirected to a socket).
+  desc: A command line contains a well-known reverse shell construct (/dev/tcp or /dev/udp redirections, nc/ncat -e or -c, socat EXEC or SYSTEM).
   condition: >
     gvisor_exec
     and (proc.args contains "/dev/tcp/" or proc.args contains "/dev/udp/"
          or (proc.name in (gvisor_netcat_binaries)
              and (proc.args startswith "-e" or proc.args contains " -e"
                   or proc.args startswith "-c" or proc.args contains " -c"
-                  or proc.args contains "--exec" or proc.args contains "--sh-exec" or proc.args contains "exec:"))
-         or proc.args contains "-i >&")
+                  or proc.args contains "--exec" or proc.args contains "--sh-exec"
+                  or proc.args icontains "exec:" or proc.args icontains "system:")))
     and not gvisor_reverse_shell_allowlist
   output: >
     Reverse shell command line in gVisor sandbox (proc=%proc.name cmdline=%proc.cmdline
