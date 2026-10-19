@@ -15,5 +15,6 @@ RUN CGO_ENABLED=1 go build -trimpath -buildmode=c-shared \
 FROM ${FALCO_IMAGE}
 COPY --from=build /out/libgvisor.so /usr/share/falco/plugins/libgvisor.so
 COPY rules/gvisor_rules.yaml /etc/falco/rules.d/gvisor_rules.yaml
+COPY deploy/falco.rules.d/gvisor_host_exceptions.yaml /etc/falco/rules.d/gvisor_host_exceptions.yaml
 COPY deploy/falco.config.d/gvisor.yaml /etc/falco/config.d/gvisor.yaml
 COPY deploy/gvisor-session.json deploy/gvisor-pod-init.json deploy/gvisor-session-full.json deploy/pod-init-full.json /etc/falco/

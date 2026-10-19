@@ -1,0 +1,18 @@
+# Exceptions to Falco's stock syscall rules for hosts that run gVisor. Drop
+# into /etc/falco/rules.d/ so it loads after falco_rules.yaml, which must be
+# loaded too: the overrides below need the stock rules they extend.
+#
+# With the systrap platform, the gVisor Sentry ptraces its own stub
+# processes, so every sandbox start would otherwise raise dozens of
+# "PTRACE attached to process" alerts. Only the Sentry binary started by
+# runsc is excepted; every other ptrace attach still alerts.
+
+- rule: PTRACE attached to process
+  exceptions:
+    - name: gvisor_sentry
+      fields: [proc.exepath, proc.pname]
+      comps: [endswith, =]
+      values:
+        - [/gvisor-bin/gvisor_sentry, runsc]
+  override:
+    exceptions: append

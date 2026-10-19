@@ -12,6 +12,10 @@ Falco needs:
 
 The listening socket is created with mode `0660`, owned by Falco's user and group. The plugin refuses to listen if the socket directory is a symlink, is writable by other users, is group-writable with a group other than root, or is owned by a user other than root or Falco's. Use a `0750` (or `0755`) directory owned by root. It also rejects connections from processes running as any user other than root or Falco's (checked with `SO_PEERCRED`), counted in `gvisor.stats.peer_rejected`. runsc creates sandboxes as root, so rootless runsc is not supported.
 
+## Host rules on gVisor hosts
+
+With the systrap platform, the gVisor Sentry ptraces its own stub processes, so Falco's stock syscall rule **PTRACE attached to process** fires dozens of times on every sandbox start and buries real alerts. [`deploy/falco.rules.d/gvisor_host_exceptions.yaml`](../deploy/falco.rules.d/gvisor_host_exceptions.yaml) excepts only the Sentry binary (`proc.exepath` ending in `/gvisor-bin/gvisor_sentry`) when its parent is `runsc`; every other ptrace attach still alerts. The image installs it in `/etc/falco/rules.d/`. On other installs, copy it there yourself. It needs the stock `falco_rules.yaml` to be loaded before it, which the default `rules_files` does.
+
 ## Finding the runsc state root
 
 The root depends on how runsc is invoked:
