@@ -88,7 +88,12 @@ const runscListJSON = `[
 ]`
 
 func newTestAttacher(runner Runner, conns ConnectionLister) (*Attacher, *Stats) {
+	return newTestAttacherWith(runner, conns, providerCRI)
+}
+
+func newTestAttacherWith(runner Runner, conns ConnectionLister, provider string) (*Attacher, *Stats) {
 	cfg := DefaultConfig()
+	cfg.MetadataProvider = provider
 	cfg.RunscPath = "/usr/local/bin/runsc"
 	cfg.RunscRoot = "/run/runsc"
 	cfg.SessionConfigPath = "/etc/falco/session.json"
@@ -276,5 +281,27 @@ func TestExecRunner(t *testing.T) {
 	}
 	if _, err := (execRunner{}).Run(context.Background(), nil, "/nonexistent/runsc"); err == nil {
 		t.Error("expected error for missing binary")
+	}
+}
+
+func TestAttacherSandboxIDs(t *testing.T) {
+	const list = `[
+ {"id":"web","status":"running","annotations":{"io.kubernetes.cri.sandbox-id":"other"}},
+ {"id":"-bad","status":"running"},
+ {"id":"pod2-app","status":"running","annotations":{"io.kubernetes.cri.sandbox-id":"--force"}}
+]`
+	cases := map[string][]string{
+		providerDocker: {"pod2-app", "web"},
+		providerCRI:    {"other", "pod2-app"},
+	}
+	for provider, want := range cases {
+		t.Run(provider, func(t *testing.T) {
+			runner := &fakeRunner{list: list}
+			a, _ := newTestAttacherWith(runner, &fakeConns{}, provider)
+			a.Sweep(context.Background())
+			if got := runner.attached(); !reflect.DeepEqual(got, want) {
+				t.Errorf("attached %v, want %v", got, want)
+			}
+		})
 	}
 }

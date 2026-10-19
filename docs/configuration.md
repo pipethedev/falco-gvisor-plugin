@@ -30,7 +30,7 @@ gVisor connects to the plugin only when a sandbox starts, and never reconnects. 
 
 | Key | Default | Meaning |
 |---|---|---|
-| `metadataProvider` | `docker` | Where container names, images and labels come from: `docker`, `cri` or `none`. |
+| `metadataProvider` | `docker` | Where container names, images and labels come from: `docker`, `cri` or `none`. Use `cri` on Kubernetes: only then does the attacher trust the CRI annotations that group a pod's containers into one sandbox (under Docker, any user can set annotations). |
 | `dockerSocket` | `/var/run/docker.sock` | Used by the `docker` provider. |
 | `criSocket` | `/run/containerd/containerd.sock` | Used by the `cri` provider (also gives pod name, namespace and labels). |
 | `labelAllowlist` | `[]` (all) | Only fetch these labels. |

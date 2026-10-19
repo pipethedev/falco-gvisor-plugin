@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -24,6 +25,8 @@ const (
 	flagForce            = "--force"
 	flagConfig           = "--config"
 )
+
+var sandboxIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.+-]*$`)
 
 var sandboxIDAnnotations = []string{
 	"io.kubernetes.cri.sandbox-id",
@@ -67,6 +70,10 @@ type Attacher struct {
 	listTimeout   time.Duration
 	attachTimeout time.Duration
 	attachGrace   time.Duration
+	// podAnnotations enables grouping containers into their pod sandbox by
+	// the CRI sandbox-id annotations. Only containerd and CRI-O set them
+	// reliably; under Docker any user can set annotations.
+	podAnnotations bool
 
 	mu       sync.Mutex
 	attached map[int32]*attachBinding
@@ -75,16 +82,17 @@ type Attacher struct {
 // NewAttacher returns an attacher using the runsc settings from cfg.
 func NewAttacher(cfg Config, runner Runner, conns ConnectionLister, stats *Stats) *Attacher {
 	return &Attacher{
-		runscPath:     cfg.RunscPath,
-		runscRoot:     cfg.RunscRoot,
-		sessionConfig: cfg.SessionConfigPath,
-		runner:        runner,
-		conns:         conns,
-		stats:         stats,
-		listTimeout:   defaultListTimeout,
-		attachTimeout: defaultAttachTimeout,
-		attachGrace:   defaultAttachGrace,
-		attached:      make(map[int32]*attachBinding),
+		runscPath:      cfg.RunscPath,
+		runscRoot:      cfg.RunscRoot,
+		sessionConfig:  cfg.SessionConfigPath,
+		runner:         runner,
+		conns:          conns,
+		stats:          stats,
+		listTimeout:    defaultListTimeout,
+		attachTimeout:  defaultAttachTimeout,
+		attachGrace:    defaultAttachGrace,
+		podAnnotations: cfg.MetadataProvider == providerCRI,
+		attached:       make(map[int32]*attachBinding),
 	}
 }
 
@@ -198,10 +206,14 @@ func (a *Attacher) listSandboxes(ctx context.Context) (sandboxSet, error) {
 	set := sandboxSet{byContainer: make(map[string]string)}
 	seen := map[string]bool{}
 	for _, st := range states {
-		if st.Status != statusRunning || st.ID == "" {
+		if st.Status != statusRunning {
 			continue
 		}
-		sandbox := sandboxIDOf(st)
+		if !sandboxIDPattern.MatchString(st.ID) {
+			logger.Printf("attacher: skipping container with unexpected id %q", st.ID)
+			continue
+		}
+		sandbox := a.sandboxIDOf(st)
 		set.byContainer[st.ID] = sandbox
 		if !seen[sandbox] {
 			seen[sandbox] = true
@@ -283,9 +295,15 @@ func (a *Attacher) attachArgs(sandboxID string) []string {
 	return []string{flagRoot, a.runscRoot, cmdTrace, cmdCreate, flagForce, flagConfig, a.sessionConfig, sandboxID}
 }
 
-func sandboxIDOf(st runscState) string {
+// sandboxIDOf returns the id of the sandbox a container runs in: the CRI
+// sandbox-id annotation when pod annotations are trusted and the value is a
+// valid id, the container's own id otherwise.
+func (a *Attacher) sandboxIDOf(st runscState) string {
+	if !a.podAnnotations {
+		return st.ID
+	}
 	for _, key := range sandboxIDAnnotations {
-		if id := st.Annotations[key]; id != "" {
+		if id := st.Annotations[key]; sandboxIDPattern.MatchString(id) {
 			return id
 		}
 	}
