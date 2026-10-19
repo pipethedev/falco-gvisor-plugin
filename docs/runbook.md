@@ -81,10 +81,10 @@ New containers are monitored at creation. Existing ones are attached by the plug
 | `drops_truncated` grows | Messages exceed `maxEventSize` (very long argv); raise it. |
 | `handshake_rejected` | A sandbox speaks an unsupported wire version: upgrade the plugin to match runsc. |
 | `peer_rejected` grows, log says `peer executable is not runsc` | `requireRunscPeer` is on and the connecting process isn't a binary named `runsc`: either your runtime calls runsc under another name or through a wrapper, or Falco can't see the host's processes (no host PID namespace). Fix that, or set `requireRunscPeer: false`. |
-| File rules never fire | They need the full profile (`pod-init-full.json`, `gvisor-session-full.json`). |
+| File rules never fire | They need the full profile (`pod-init-full.json`, `gvisor-session-full.json`). On the lean profile, disable them by their tag, `gvisor_full_profile` (see [Tuning rules](#tuning-rules)). |
 | Only one alert for an event matching two rules | Falco's default `rule_matching: first`. Set `rule_matching: all` to get every match. |
 
-The `gVisor Monitoring Dropping Events` rule alerts when events are dropped.
+The `gVisor Monitoring Dropping Events` rule alerts on any stats interval with drops. On busy hosts, raise the threshold by overriding `gvisor_drops_worth_alerting` (see [Tuning rules](#tuning-rules)).
 
 ## Restarts and reloads
 
@@ -115,12 +115,15 @@ Other tuning hooks:
 - `gvisor_miner_sha256` and `gvisor_network_tool_sha256`: override with `(proc.sha256 in (...))` to catch renamed tool binaries by hash.
 - `gvisor_expected_outbound_ports` / `gvisor_expected_outbound`: define normal egress before enabling **gVisor Unexpected Outbound Connection**.
 - `gvisor_sensitive_file_readers`: tools allowed to read their own credential files.
-- Enable rules that are off by default from `falco.yaml`:
+- `gvisor_drops_worth_alerting`: when **gVisor Monitoring Dropping Events** alerts, `(gvisor.stats.drops_interval > 0)` by default.
+- Enable rules that are off by default from `falco.yaml`, or disable the file rules on the lean profile, where they never fire:
 
   ```yaml
   rules:
     - enable:
         rule: gVisor Terminal Shell in Container
+    - disable:
+        tag: gvisor_full_profile
   ```
 
 Each rule's override macro is named in its condition (`gvisor_*_allowlist`, plus `gvisor_mail_server_workloads` and `gvisor_raw_socket_allowlist`).

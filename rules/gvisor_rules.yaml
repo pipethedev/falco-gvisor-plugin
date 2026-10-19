@@ -23,8 +23,13 @@
 #     override:
 #       condition: replace
 #
-# Rules marked "full profile" need syscall/openat in the trace session
-# (deploy/pod-init-full.json); the lean default session does not trace opens.
+# Rules tagged gvisor_full_profile only see file opens, which only the full
+# trace session traces (deploy/pod-init-full.json); with the lean default
+# session they never fire. To make that explicit, disable them in falco.yaml:
+#
+#   rules:
+#     - disable:
+#         tag: gvisor_full_profile
 
 - required_engine_version: 0.65.0
 
@@ -282,7 +287,7 @@
     image=%container.image id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: CRITICAL
   source: gvisor
-  tags: [gvisor, container, mitre_privilege_escalation, T1611]
+  tags: [gvisor, container, gvisor_full_profile, mitre_privilege_escalation, T1611]
 
 - macro: gvisor_ptrace_allowlist
   condition: (gvisor_never_true)
@@ -463,7 +468,7 @@
     image=%container.image id=%container.id k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: WARNING
   source: gvisor
-  tags: [gvisor, container, mitre_persistence, T1053.003, T1098.004]
+  tags: [gvisor, container, gvisor_full_profile, mitre_persistence, T1053.003, T1098.004]
 
 # ---------------------------------------------------------------------------
 # 6. Credential access
@@ -513,7 +518,7 @@
   priority: NOTICE
   source: gvisor
   enabled: false
-  tags: [gvisor, container, mitre_credential_access, T1528]
+  tags: [gvisor, container, gvisor_full_profile, mitre_credential_access, T1528]
 
 # ---------------------------------------------------------------------------
 # 7. Behaviour and stock-rule equivalents
@@ -591,7 +596,7 @@
     k8s_ns=%k8s.ns.name k8s_pod=%k8s.pod.name)
   priority: WARNING
   source: gvisor
-  tags: [gvisor, container, mitre_credential_access, T1552.001]
+  tags: [gvisor, container, gvisor_full_profile, mitre_credential_access, T1552.001]
 
 - rule: gVisor Terminal Shell in Container
   desc: >
@@ -651,11 +656,16 @@
   source: gvisor
   tags: [gvisor, plugin_health]
 
+# How many drops per stats interval are worth an alert. Override it on
+# busy hosts, for example with (gvisor.stats.drops_interval > 1000).
+- macro: gvisor_drops_worth_alerting
+  condition: (gvisor.stats.drops_interval > 0)
+
 - rule: gVisor Monitoring Dropping Events
   desc: >
     The gvisor plugin dropped trace points since the previous stats event (oversized messages,
     a full queue, sandbox-side write failures, decode errors). Each drop is a monitoring gap.
-  condition: evt.type = gvisor_stats and gvisor.stats.drops_interval > 0
+  condition: evt.type = gvisor_stats and gvisor_drops_worth_alerting
   output: >
     gVisor monitoring dropped events (since_last=%gvisor.stats.drops_interval total=%gvisor.stats.drops
     queue_full=%gvisor.stats.drops_channel_full queue_share=%gvisor.stats.drops_queue_share
