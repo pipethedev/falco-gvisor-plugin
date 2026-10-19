@@ -1,5 +1,5 @@
 {
-  "description": "CLIs taking an --algorithm flag are not miners.",
+  "description": "CLIs taking --algorithm or --algo flags, and netcat to hyphenated hosts, are not miners or reverse shells.",
   "expect": [],
   "events": [
     {
@@ -37,6 +37,32 @@
         "genpkey",
         "-algorithm",
         "ed25519"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 4,
+      "ppid": 1,
+      "comm": "hashtool",
+      "exe": "/usr/local/bin/hashtool",
+      "argv": [
+        "hashtool",
+        "--algo",
+        "sha256",
+        "/data/file"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 5,
+      "ppid": 1,
+      "comm": "nc",
+      "exe": "/usr/bin/nc",
+      "argv": [
+        "nc",
+        "-zv",
+        "db-cluster.example-corp.internal",
+        "5432"
       ]
     }
   ]
