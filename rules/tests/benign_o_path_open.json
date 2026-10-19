@@ -1,0 +1,45 @@
+{
+  "description": "O_PATH opens of credential files (e.g. by a file watcher) cannot read them and must not count as reads.",
+  "expect": [],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "python3",
+      "exe": "/usr/bin/python3",
+      "argv": [
+        "python3",
+        "watch.py"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "syscall/openat",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "python3",
+      "path": "/var/run/secrets/kubernetes.io/serviceaccount/token",
+      "flags": "O_PATH"
+    },
+    {
+      "point": "syscall/openat",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "python3",
+      "path": "/root/.ssh/id_rsa",
+      "flags": "O_PATH"
+    }
+  ]
+}

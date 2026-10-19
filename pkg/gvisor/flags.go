@@ -80,12 +80,20 @@ func openFlagsString(flags uint32) string {
 	return strings.Join(parts, flagSeparator)
 }
 
+// isOpenRead reports whether an open can read the file. O_PATH opens only
+// obtain a location and can neither read nor write, whatever O_ACCMODE says.
 func isOpenRead(flags uint32) bool {
+	if flags&linux.O_PATH != 0 {
+		return false
+	}
 	mode := flags & linux.O_ACCMODE
 	return mode == linux.O_RDONLY || mode == linux.O_RDWR
 }
 
 func isOpenWrite(flags uint32) bool {
+	if flags&linux.O_PATH != 0 {
+		return false
+	}
 	mode := flags & linux.O_ACCMODE
 	return mode == linux.O_WRONLY || mode == linux.O_RDWR
 }

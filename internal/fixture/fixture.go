@@ -65,6 +65,7 @@ var openFlags = map[string]uint32{
 	"O_CREAT":  linux.O_CREAT,
 	"O_TRUNC":  linux.O_TRUNC,
 	"O_APPEND": linux.O_APPEND,
+	"O_PATH":   linux.O_PATH,
 }
 
 var socketDomains = map[string]int32{

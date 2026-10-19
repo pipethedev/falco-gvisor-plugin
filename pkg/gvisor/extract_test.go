@@ -175,6 +175,19 @@ func TestExtractOpen(t *testing.T) {
 	}
 }
 
+func TestExtractOpenPathIsNeitherReadNorWrite(t *testing.T) {
+	evt := eventFor(t, pb.MessageType_MESSAGE_SYSCALL_OPEN, &pb.Open{
+		ContextData: testContext(42, 1, "app"), Exit: &pb.Exit{Result: 3}, Fd: linux.AT_FDCWD,
+		Pathname: "/var/run/secrets/kubernetes.io/serviceaccount/token", Flags: linux.O_PATH | linux.O_CLOEXEC,
+	})
+	if get(t, evt, fieldEvtIsOpenRead) != false || get(t, evt, fieldEvtIsOpenWrite) != false {
+		t.Errorf("O_PATH open: read=%v write=%v, want both false", get(t, evt, fieldEvtIsOpenRead), get(t, evt, fieldEvtIsOpenWrite))
+	}
+	if got := get(t, evt, fieldEvtArgFlags); got != "O_RDONLY|O_CLOEXEC|O_PATH" {
+		t.Errorf("flags = %v", got)
+	}
+}
+
 func TestExtractSocketAndPtrace(t *testing.T) {
 	evt := eventFor(t, pb.MessageType_MESSAGE_SYSCALL_SOCKET, &pb.Socket{
 		ContextData: testContext(42, 1, "nmap"), Exit: &pb.Exit{Result: 3},
