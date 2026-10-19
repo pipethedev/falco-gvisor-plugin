@@ -33,7 +33,10 @@ const (
 type gvisorPlugin struct {
 	plugins.BasePlugin
 	config gvisor.Config
-	cache  *eventCache
+	// cache is created by Init, since fields can be extracted from capture
+	// files without Open, and replaced on every Open: event numbers start
+	// again with each capture, so entries from a previous one would be wrong.
+	cache *eventCache
 }
 
 func (p *gvisorPlugin) Info() *plugins.Info {
@@ -123,6 +126,7 @@ func (p *gvisorPlugin) Open(params string) (source.Instance, error) {
 	if err := validateOpenParams(params); err != nil {
 		return nil, err
 	}
+	p.cache = newEventCache()
 	src, err := gvisor.StartSource(p.config, gvisor.NewExecRunner())
 	if err != nil {
 		return nil, err

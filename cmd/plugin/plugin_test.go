@@ -3,7 +3,12 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
+
+	"github.com/falcosecurity/plugin-sdk-go/pkg/sdk"
 
 	"github.com/falcosecurity/plugins/plugins/gvisor/pkg/gvisor"
 )
@@ -82,5 +87,30 @@ func TestBatchSizeBoundsMemory(t *testing.T) {
 		if got := batchSize(eventSize); got != want || uint64(got)*uint64(eventSize) > batchMemoryBudget && got != 1 {
 			t.Errorf("batchSize(%d) = %d, want %d", eventSize, got, want)
 		}
+	}
+}
+
+func TestOpenResetsEventCache(t *testing.T) {
+	p := &gvisorPlugin{}
+	dir, err := os.MkdirTemp("", "gv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	cfg := fmt.Sprintf(`{"socketPath":%q,"metadataProvider":"none","attachOnOpen":false,"attachIntervalSeconds":0}`, filepath.Join(dir, "s.sock"))
+	if err := p.Init(cfg); err != nil {
+		t.Fatal(err)
+	}
+	stale := &gvisor.Event{}
+	p.cache = newEventCache()
+	_, _ = p.cache.get(1, func() (*gvisor.Event, error) { return stale, nil })
+	if inst, err := p.Open(""); err == nil {
+		if c, ok := inst.(sdk.Closer); ok {
+			c.Close()
+		}
+	}
+	evt, _ := p.cache.get(1, func() (*gvisor.Event, error) { return &gvisor.Event{}, nil })
+	if evt == stale {
+		t.Error("an event decoded in a previous capture was returned after Open")
 	}
 }
