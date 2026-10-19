@@ -61,6 +61,7 @@ type Server struct {
 	maxProcesses int
 	metadataWait time.Duration
 	maxConns     int
+	requireRunsc bool
 	captureArgs  bool
 	emit         EmitFunc
 	resolver     ContainerResolver
@@ -99,6 +100,7 @@ func NewServer(cfg Config, emit EmitFunc, resolver ContainerResolver, stats *Sta
 		maxProcesses: cfg.MaxTrackedProcesses,
 		metadataWait: cfg.metadataWait(),
 		maxConns:     cfg.MaxConnections,
+		requireRunsc: cfg.RequireRunscPeer,
 		captureArgs:  cfg.CaptureArgs,
 		emit:         emit,
 		resolver:     resolver,
@@ -188,9 +190,9 @@ func (s *Server) acceptOne() bool {
 		return true
 	}
 	pid, uid, credOK := peerCred(conn)
-	if credOK && !allowedPeer(uid, os.Geteuid()) {
+	if err := checkPeer(pid, uid, credOK, os.Geteuid(), s.requireRunsc); err != nil {
 		s.stats.PeerRejected.Add(1)
-		logger.Printf("rejected connection from pid %d: %v (uid %d)", pid, errUntrustedPeer, uid)
+		logger.Printf("rejected connection from pid %d (uid %d): %v", pid, uid, err)
 		_ = conn.Close()
 		return true
 	}

@@ -73,3 +73,29 @@ func TestCheckSocketDir(t *testing.T) {
 		t.Errorf("directory owned by another user accepted: %v", err)
 	}
 }
+
+func TestCheckPeer(t *testing.T) {
+	self := os.Geteuid()
+	cases := []struct {
+		name    string
+		credOK  bool
+		uid     uint32
+		runsc   bool
+		wantErr error
+	}{
+		{"no credentials", false, 0, false, errNoPeerCredentials},
+		{"other user", true, uint32(self) + 1, false, errUntrustedPeer},
+		{"root", true, rootUID, false, nil},
+		{"self", true, uint32(self), false, nil},
+		{"not runsc", true, uint32(self), true, errPeerNotRunsc},
+	}
+	for _, tc := range cases {
+		err := checkPeer(int32(os.Getpid()), tc.uid, tc.credOK, self, tc.runsc)
+		if tc.wantErr == nil && err != nil || tc.wantErr != nil && !errors.Is(err, tc.wantErr) {
+			if tc.name == "other user" && self == rootUID {
+				continue
+			}
+			t.Errorf("%s: err = %v, want %v", tc.name, err, tc.wantErr)
+		}
+	}
+}

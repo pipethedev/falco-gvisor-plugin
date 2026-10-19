@@ -58,6 +58,7 @@ type Config struct {
 	MetadataWaitMillis      int      `json:"metadataWaitMillis"`
 	CaptureArgs             bool     `json:"captureArgs"`
 	MaxConnections          int      `json:"maxConnections"`
+	RequireRunscPeer        bool     `json:"requireRunscPeer"`
 }
 
 // DefaultConfig returns the configuration used for keys absent from the init config.

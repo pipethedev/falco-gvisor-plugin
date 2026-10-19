@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path/filepath"
+	"strings"
 	"syscall"
 )
 
@@ -15,8 +17,12 @@ const (
 	groupWriteMode = 0o020
 )
 
+const runscExeName = "runsc"
+
 var (
 	errUntrustedPeer      = errors.New("peer uid not allowed")
+	errNoPeerCredentials  = errors.New("peer credentials unavailable")
+	errPeerNotRunsc       = errors.New("peer executable is not runsc")
 	errUntrustedSocketDir = errors.New("untrusted socket directory")
 )
 
@@ -51,6 +57,20 @@ func checkSocketDir(dir string, self int) error {
 	}
 	if info.Mode().Perm()&groupWriteMode != 0 && st.Gid != rootGID {
 		return fmt.Errorf("%w: %s is writable by group %d", errUntrustedSocketDir, dir, st.Gid)
+	}
+	return nil
+}
+
+// checkPeer decides whether a connecting process may act as a sandbox sink.
+func checkPeer(pid int32, uid uint32, credOK bool, self int, requireRunsc bool) error {
+	if !credOK {
+		return errNoPeerCredentials
+	}
+	if !allowedPeer(uid, self) {
+		return errUntrustedPeer
+	}
+	if requireRunsc && !strings.HasPrefix(filepath.Base(peerExe(pid)), runscExeName) {
+		return errPeerNotRunsc
 	}
 	return nil
 }

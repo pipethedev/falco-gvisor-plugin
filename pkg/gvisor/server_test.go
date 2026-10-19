@@ -317,6 +317,17 @@ func TestServerCapsConnections(t *testing.T) {
 	}
 }
 
+func TestServerRequireRunscPeer(t *testing.T) {
+	c := newCollector(1)
+	srv, stats := startServer(t, func(cfg *Config) { cfg.RequireRunscPeer = true }, c, fakeResolver{})
+	conn := dialSandbox(t, srv.socketPath, wire.CurrentVersion)
+	_ = conn.SetReadDeadline(time.Now().Add(testWait))
+	if _, err := conn.Read(make([]byte, handshakeBufferSize)); err == nil {
+		t.Error("a non-runsc peer was accepted with requireRunscPeer")
+	}
+	waitFor(t, "peer rejection", func() bool { return stats.PeerRejected.Load() == 1 })
+}
+
 func TestServerRejectsBadHandshakeOnly(t *testing.T) {
 	c := newCollector(16)
 	srv, stats := startServer(t, nil, c, fakeResolver{})
