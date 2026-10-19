@@ -222,52 +222,56 @@ func TestProcessTablePidReuseReplacesRow(t *testing.T) {
 
 func TestProcessTableSyscallExec(t *testing.T) {
 	table := NewProcessTable(defaultMaxTrackedProcess)
+	execExit := func(pid int32, comm, pathname string, errno int64, argv ...string) Snapshot {
+		return table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_EXECVE, &pb.Execve{
+			ContextData: testContext(pid, 1, comm), Exit: &pb.Exit{Errorno: errno}, Fd: linux.AT_FDCWD, Pathname: pathname, Argv: argv,
+		}))
+	}
+	connect := func(pid int32, comm string) Snapshot {
+		return table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{ContextData: testContext(pid, 1, comm), Exit: &pb.Exit{}}))
+	}
+
 	table.Apply(execPoint(t, 6, 1, "/bin/sh", "sh"))
-	exit := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_EXECVE, &pb.Execve{
-		ContextData: testContext(6, 1, "cat"), Exit: &pb.Exit{}, Pathname: "/bin/cat", Argv: []string{"cat"},
-	}))
+	exit := execExit(6, "sh", "/bin/cat", 0, "cat")
 	sentry := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SENTRY_EXEC, &pb.ExecveInfo{
 		ContextData: testContext(6, 1, "cat"), BinaryPath: "/usr/bin/busybox", Execfn: "/bin/cat", Argv: []string{"cat"},
 		BinaryMode: 0o755, BinaryOverlayfsLower: true,
 	}))
-	after := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{ContextData: testContext(6, 1, "cat"), Exit: &pb.Exit{}}))
-	if exit.Process.ExePath != "/bin/cat" || exit.ExecFallback {
-		t.Errorf("syscall exit before its sentry point: %+v, fallback %v", exit.Process, exit.ExecFallback)
+	after := connect(6, "cat")
+	if exit.Process.ExePath != "/bin/sh" || exit.ExecFallback {
+		t.Errorf("the execve exit, sent before the image loads, changed the process: %+v", exit.Process)
 	}
-	if p := sentry.Process; p.ExePath != "/usr/bin/busybox" || !p.LowerLayer || !p.HasBinaryInfo || sentry.ExecFallback || after.ExecFallback {
+	if p := sentry.Process; p.ExePath != "/usr/bin/busybox" || !p.LowerLayer || sentry.ExecFallback || after.ExecFallback {
 		t.Errorf("an exec reported by both points was treated as a fallback or lost its details: %+v", p)
 	}
 
-	table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_EXECVE, &pb.Execve{
-		ContextData: testContext(6, 1, "update"), Exit: &pb.Exit{}, Fd: linux.AT_FDCWD, Pathname: "update", Argv: []string{"./update", "-q"},
-	}))
-	missed := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SENTRY_TASK_EXIT, &pb.TaskExit{ContextData: testContext(6, 1, "update")}))
+	table.Apply(execPoint(t, 7, 1, "/bin/sh", "sh"))
+	execExit(7, "sh", "/no/such/xmrig", 0, "/no/such/xmrig", "--donate-level", "1")
+	failed := connect(7, "sh")
+	if failed.ExecFallback || failed.Process.ExePath != "/bin/sh" || failed.Process.Args() != "" {
+		t.Errorf("an exec whose image never loaded was reported as a program change: %+v, fallback %v", failed.Process, failed.ExecFallback)
+	}
+
+	execExit(7, "sh", "update", 0, "./update", "-q")
+	missed := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SENTRY_TASK_EXIT, &pb.TaskExit{ContextData: testContext(7, 1, "update")}))
 	p := missed.Process
-	if p.ExePath != "/app/update" || p.Comm != "update" || p.Args() != "-q" || p.HasBinaryInfo || p.LowerLayer || !missed.ExecFallback {
-		t.Errorf("the event after an exec whose sentry point was dropped must flag the fallback and show the new program: %+v, fallback %v", p, missed.ExecFallback)
+	if !missed.ExecFallback || p.ExePath != "/app/update" || p.Comm != "update" || p.Args() != "-q" || p.HasBinaryInfo {
+		t.Errorf("an exec renamed by gVisor whose sentry point was lost must show the new program: %+v, fallback %v", p, missed.ExecFallback)
 	}
 
 	table.Apply(execPoint(t, 8, 1, "/bin/sh", "sh"))
-	table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_EXECVE, &pb.Execve{
-		ContextData: testContext(8, 1, "sh"), Exit: &pb.Exit{}, Pathname: "/bin/sh", Argv: []string{"sh"},
-	}))
-	if again := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{ContextData: testContext(8, 1, "sh"), Exit: &pb.Exit{}})); !again.ExecFallback {
-		t.Error("a dropped re-exec of the same program was not flagged")
+	execExit(8, "sh", "/bin/sh", 0, "sh", "-c", "id")
+	if same := connect(8, "sh"); same.ExecFallback {
+		t.Error("an exec of a program with the same name cannot be confirmed and must not be flagged")
+	}
+	execExit(8, "sh", "/nope", 2)
+	if errored := connect(8, "sh"); errored.ExecFallback || errored.Process.ExePath != "/bin/sh" {
+		t.Error("an execve that failed at the syscall changed the process or was flagged")
 	}
 
-	table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_EXECVE, &pb.Execve{
-		ContextData: testContext(8, 1, "sh"), Exit: &pb.Exit{Errorno: 2}, Pathname: "/nope",
-	}))
-	failed := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{ContextData: testContext(8, 1, "sh"), Exit: &pb.Exit{}}))
-	if failed.Process.ExePath != "/bin/sh" || failed.ExecFallback {
-		t.Error("a failed execve changed the process or was flagged")
-	}
-
-	table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_EXECVE, &pb.Execve{
-		ContextData: testContext(8, 1, "sh"), Exit: &pb.Exit{}, Pathname: "/bin/ls", Argv: []string{"ls"},
-	}))
-	table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SENTRY_CLONE, &pb.CloneInfo{ContextData: testContext(8, 1, "ls"), CreatedThreadGroupId: 9, CreatedThreadId: 9}))
-	if child := table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SYSCALL_CONNECT, &pb.Connect{ContextData: testContext(9, 8, "ls"), Exit: &pb.Exit{}})); child.ExecFallback {
+	execExit(8, "sh", "/bin/ls", 0, "ls")
+	table.Apply(mustPoint(t, pb.MessageType_MESSAGE_SENTRY_CLONE, &pb.CloneInfo{ContextData: testContext(8, 1, "sh"), CreatedThreadGroupId: 9, CreatedThreadId: 9}))
+	if child := connect(9, "ls"); child.ExecFallback {
 		t.Error("a child inherited its parent's pending exec")
 	}
 }

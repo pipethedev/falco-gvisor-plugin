@@ -1,5 +1,5 @@
 {
-  "description": "gVisor dropped the sentry/execve point of a miner exec (drops_sandbox), so only the execve syscall exit arrived. The process's next event, its exit, stands in for the exec and the miner rule still fires.",
+  "description": "gVisor dropped the sentry/execve point of a miner exec (drops_sandbox), so only the execve syscall exit arrived, carrying the shell's name as gVisor sends it before the image loads. The process's next event, its exit, shows the task renamed to xmrig, which confirms the exec; the miner rule fires on it.",
   "expect": [
     "gVisor Crypto Miner Executed"
   ],
@@ -25,7 +25,7 @@
       "point": "syscall/execve",
       "pid": 2,
       "ppid": 1,
-      "comm": "xmrig",
+      "comm": "sh",
       "exe": "/tmp/xmrig",
       "argv": [
         "/tmp/xmrig",

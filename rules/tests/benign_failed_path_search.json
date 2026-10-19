@@ -1,0 +1,75 @@
+{
+  "description": "A shell searching PATH: execve of a missing miner binary is reported by gVisor as successful before the image load fails, then the next candidate runs. The failed candidate must not be treated as an exec.",
+  "expect": [],
+  "events": [
+    {
+      "point": "sentry/execve",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "exe": "/bin/sh",
+      "argv": [
+        "/bin/sh"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/clone",
+      "pid": 1,
+      "ppid": 0,
+      "comm": "sh",
+      "child": 2
+    },
+    {
+      "point": "syscall/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "sh",
+      "exe": "/usr/local/sbin/xmrig",
+      "argv": [
+        "xmrig",
+        "--donate-level",
+        "1",
+        "-o",
+        "stratum+tcp://pool.invalid:3333"
+      ]
+    },
+    {
+      "point": "syscall/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "sh",
+      "exe": "/usr/local/bin/true",
+      "argv": [
+        "true"
+      ]
+    },
+    {
+      "point": "syscall/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "sh",
+      "exe": "/usr/bin/true",
+      "argv": [
+        "true"
+      ]
+    },
+    {
+      "point": "sentry/execve",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "true",
+      "exe": "/usr/bin/true",
+      "argv": [
+        "true"
+      ],
+      "lower_layer": true
+    },
+    {
+      "point": "sentry/task_exit",
+      "pid": 2,
+      "ppid": 1,
+      "comm": "true"
+    }
+  ]
+}

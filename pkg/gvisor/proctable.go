@@ -25,7 +25,8 @@ type Snapshot struct {
 	// socket() call that created it was seen.
 	L4 string `json:"l4,omitempty"`
 	// ExecFallback marks the first event of a process after an exec whose
-	// sentry/execve point was never received, so exec rules still see it.
+	// sentry/execve point was never received but whose effect (the task
+	// renamed to the new program) shows it happened, so exec rules see it.
 	ExecFallback bool `json:"execfb,omitempty"`
 }
 
@@ -71,8 +72,14 @@ func (t *ProcessTable) Apply(p Point) Snapshot {
 		prevUID = &uid
 	}
 	_, sentryExec := p.Msg.(*pb.ExecveInfo)
-	execFallback := proc.execPending && !sentryExec
-	proc.execPending = false
+	execFallback := false
+	if pending := proc.pending; pending != nil {
+		proc.pending = nil
+		if !sentryExec && pending.confirms(proc.Comm, ctx.GetProcessName()) {
+			proc.commitExec(pending)
+			execFallback = true
+		}
+	}
 	proc.applyContext(ctx)
 
 	switch m := p.Msg.(type) {

@@ -59,9 +59,20 @@ type ProcessInfo struct {
 	StderrType    string   `json:"stderr,omitempty"`
 	TTY           uint32   `json:"tty,omitempty"`
 	StdinPipeComm string   `json:"stdinpipe,omitempty"`
-	// execPending is set by a successful execve/execveat exit and cleared
-	// by the sentry/execve point that runsc sends right after it.
-	execPending bool
+	// pending is the exec announced by the latest execve/execveat exit,
+	// until the process's next event shows whether it happened.
+	pending *pendingExec
+}
+
+// pendingExec is an exec whose syscall exit was seen. gVisor reports that
+// exit as successful before it loads the new image, so it only says the
+// exec started: loading can still fail (a missing file during a PATH
+// search, a bad binary). comm is the name gVisor gives the task if the
+// image loads.
+type pendingExec struct {
+	invoked string
+	argv    []string
+	comm    string
 }
 
 // Exe returns argv[0], or the exe path when argv is unknown.
@@ -113,7 +124,6 @@ func (p *ProcessInfo) applyContext(ctx *pb.ContextData) {
 }
 
 func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
-	p.execPending = false
 	p.ExePath = info.GetBinaryPath()
 	p.InvokedPath = resolvePath(invokedPath(info), linux.AT_FDCWD, "", p.Cwd)
 	p.Argv = budgetArgv(info.GetArgv())
@@ -130,15 +140,36 @@ func (p *ProcessInfo) applyExec(info *pb.ExecveInfo) {
 	p.StdinPipeComm = truncateComm(info.GetPipeInputProc().GetContextData().GetProcessName())
 }
 
-// applySyscallExec handles a successful execve/execveat exit. runsc sends
-// it just before the sentry/execve point, which then replaces the row with
-// richer data; if that point is dropped, the row has still moved to the new
-// program, with binary-level details (layer flags, hash, stdio) unknown.
+// applySyscallExec records the exec announced by an execve/execveat exit
+// without changing the row: whether it happened is only known from the
+// process's next event (see ProcessTable.Apply).
 func (p *ProcessInfo) applySyscallExec(m *pb.Execve) {
-	p.execPending = true
-	invoked := resolvePath(m.GetPathname(), m.GetFd(), m.GetFdPath(), p.Cwd)
-	if invoked == "" || invoked == p.InvokedPath {
-		return
+	name := m.GetPathname()
+	if name == "" {
+		name = strconv.FormatInt(m.GetFd(), 10)
+	}
+	p.pending = &pendingExec{
+		invoked: resolvePath(m.GetPathname(), m.GetFd(), m.GetFdPath(), p.Cwd),
+		argv:    budgetArgv(m.GetArgv()),
+		comm:    truncateComm(path.Base(name)),
+	}
+}
+
+// confirms reports whether an event whose context names the task comm
+// shows that the pending exec replaced the process: gVisor renamed the task
+// to the new program. An exec of a program with the same name cannot be
+// told apart from a failed one, so it is never confirmed.
+func (e *pendingExec) confirms(previousComm, comm string) bool {
+	return e.comm != "" && comm == e.comm && previousComm != e.comm
+}
+
+// commitExec moves the row to a confirmed exec whose sentry/execve point was
+// lost. Binary-level details (layer flags, hash, stdio) only come with that
+// point, so they are left unknown.
+func (p *ProcessInfo) commitExec(e *pendingExec) {
+	exe := e.invoked
+	if exe == "" {
+		exe = e.comm
 	}
 	*p = ProcessInfo{
 		Pid:           p.Pid,
@@ -150,11 +181,10 @@ func (p *ProcessInfo) applySyscallExec(m *pb.Execve) {
 		StartTimeNs:   p.StartTimeNs,
 		IsExecSession: p.IsExecSession,
 		TTY:           p.TTY,
-		ExePath:       invoked,
-		InvokedPath:   invoked,
-		Argv:          budgetArgv(m.GetArgv()),
-		Comm:          truncateComm(path.Base(invoked)),
-		execPending:   true,
+		ExePath:       exe,
+		InvokedPath:   e.invoked,
+		Argv:          e.argv,
+		Comm:          e.comm,
 	}
 }
 
@@ -181,7 +211,7 @@ func (p *ProcessInfo) applyStart(start *pb.Start) {
 
 func (p ProcessInfo) clone() ProcessInfo {
 	c := p
-	c.execPending = false
+	c.pending = nil
 	c.Argv = append([]string(nil), p.Argv...)
 	return c
 }

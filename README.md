@@ -105,7 +105,7 @@ Releases also ship tarballs: `gvisor-<version>-linux-{x86_64,aarch64}.tar.gz` fo
 
 - **Only what gVisor reports is visible.** The default profile does not include file opens; file-based rules need the [full profile](docs/configuration.md#trace-sessions), which costs more.
 - **Some events can be lost silently.** gVisor drops events whose text (arguments, paths, names) isn't valid UTF-8 without counting them. This needs a fix in gVisor ([issue draft](docs/upstream-issues.md)).
-- **Dropped exec events lose detail.** If gVisor drops an exec event under load, exec rules still fire on the process's next event, but rules that need details about the binary (where it came from, its hash) can't.
+- **Dropped exec events lose detail.** If gVisor drops an exec event under load, exec rules still fire on the process's next event, but rules that need details about the binary (where it came from, its hash) can't, and an exec of a program with the same name as the old one (say `sh` running `sh -c …`) is missed.
 - **Running sandboxes are picked up by polling**, every `attachIntervalSeconds` (5 minutes by default), not instantly.
 - **Process IDs are the sandbox's own**, not the host's.
 - **No response actions.** The plugin detects; to stop containers, use a separate responder on Falco's output.

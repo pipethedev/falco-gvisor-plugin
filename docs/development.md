@@ -46,7 +46,7 @@ The byte format of the events the plugin hands Falco is in [payload.md](payload.
 ## Validation status
 
 - **Unit tests** pass with the race detector on macOS, Linux arm64 and Linux amd64 (amd64 under emulation). golangci-lint is clean and the decoders are fuzzed.
-- **Rules:** all 41 checks pass against Falco 0.45.0 on arm64 and amd64, including the recorded runsc traffic and a pass with the default rules that must stay silent on routine pod behaviour.
+- **Rules:** all 42 checks pass against Falco 0.45.0 on arm64 and amd64, including the recorded runsc traffic and a pass with the default rules that must stay silent on routine pod behaviour.
 - **Real gVisor** (runsc release-20261012.0, arm64, systrap), in `make test-gvisor` and CI. It checks that:
   - a sandbox with monitoring enabled starts while nothing is listening
   - the plugin attaches an unmonitored sandbox

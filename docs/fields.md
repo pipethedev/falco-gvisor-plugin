@@ -114,7 +114,7 @@ Differences from Falco's syscall source:
 | `gvisor.anames` | list of string | Names of all known ancestors, nearest first; use with intersects / in. |
 | `gvisor.exit_status` | uint64 | Exit status for task_exit and exit_notify_parent points. |
 | `gvisor.prev_uid` | uint64 | setuid-family events: the effective uid the process had before the call. Absent if the process had not been seen before. |
-| `gvisor.is_exec_fallback` | bool | True on the first event of a process after a successful execve/execveat whose sentry/execve point was not received (dropped by gVisor), so exec rules can match it in place of sentry_execve. proc.* describes the new program; binary details (layer flags, hash, stdio) are absent. |
+| `gvisor.is_exec_fallback` | bool | True on the first event of a process after an execve/execveat whose sentry/execve point was not received (dropped by gVisor) but which did happen: gVisor reports the syscall exit before loading the image, so the exec only counts once a later event shows the task renamed to the new program. Exec rules can match it in place of sentry_execve. proc.* describes the new program; binary details (layer flags, hash, stdio) are absent. An exec of a program with the same name as the old one cannot be confirmed this way. |
 | `gvisor.stdin_pipe_proc` | string | Name of the process writing to this process's stdin pipe at exec, e.g. curl in curl \| sh. Set only if the writer is still running when the reader execs (gVisor inspects live siblings), and requires pipe_proc_info on sentry/execve. |
 
 ## Stats (`evt.type = gvisor_stats`)

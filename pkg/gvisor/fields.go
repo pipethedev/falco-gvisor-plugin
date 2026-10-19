@@ -200,7 +200,7 @@ var fieldDefs = []FieldDef{
 	{Name: fieldGvisorANames, Type: typeString, IsList: true, Desc: "Names of all known ancestors, nearest first; use with intersects / in."},
 	field(fieldGvisorExitStatus, typeUint64, "Exit status for task_exit and exit_notify_parent points."),
 	field(fieldGvisorPrevUID, typeUint64, "setuid-family events: the effective uid the process had before the call. Absent if the process had not been seen before."),
-	field(fieldGvisorExecFallback, typeBool, "True on the first event of a process after a successful execve/execveat whose sentry/execve point was not received (dropped by gVisor), so exec rules can match it in place of sentry_execve. proc.* describes the new program; binary details (layer flags, hash, stdio) are absent."),
+	field(fieldGvisorExecFallback, typeBool, "True on the first event of a process after an execve/execveat whose sentry/execve point was not received (dropped by gVisor) but which did happen: gVisor reports the syscall exit before loading the image, so the exec only counts once a later event shows the task renamed to the new program. Exec rules can match it in place of sentry_execve. proc.* describes the new program; binary details (layer flags, hash, stdio) are absent. An exec of a program with the same name as the old one cannot be confirmed this way."),
 	field(fieldGvisorStdinPipeProc, typeString, "Name of the process writing to this process's stdin pipe at exec, e.g. curl in curl | sh. Set only if the writer is still running when the reader execs (gVisor inspects live siblings), and requires pipe_proc_info on sentry/execve."),
 
 	field(fieldStatsConnections, typeUint64, "gvisor_stats: live sandbox connections."),
